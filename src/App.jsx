@@ -5,9 +5,15 @@ import AboutSection from "./components/AboutSection";
 import TreatmentsSection from "./components/TreatmentsSection";
 import BookingSection from "./components/BookingSection";
 import ContactSection from "./components/ContactSection";
+import AdminLogin from "./admin/AdminLogin";
+import AdminDashboard from "./admin/AdminDashboard";
 
 function App() {
   const [language, setLanguage] = useState("he");
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [adminToken, setAdminToken] = useState(
+    localStorage.getItem("revira_admin_token") || ""
+  );
 
   const content = {
     he: {
@@ -94,8 +100,9 @@ function App() {
         footer: "© REVIRA Clinic. כל הזכויות שמורות.",
       },
       langButton: "العربية",
+      adminButton: "כניסת אדמין",
+      backButton: "חזרה לאתר",
     },
-
     ar: {
       nav: {
         home: "الرئيسية",
@@ -180,10 +187,49 @@ function App() {
         footer: "© REVIRA Clinic. جميع الحقوق محفوظة.",
       },
       langButton: "עברית",
+      adminButton: "دخول الأدمن",
+      backButton: "العودة للموقع",
     },
   };
 
   const t = content[language];
+
+  const handleLogout = () => {
+    localStorage.removeItem("revira_admin_token");
+    setAdminToken("");
+    setShowAdmin(false);
+  };
+
+  if (showAdmin) {
+    return (
+      <div className="app" dir="rtl">
+        <header>
+          <div className="container navbar">
+            <div className="logo-area">
+              <span className="logo-text">REVIRA ADMIN</span>
+            </div>
+
+            <button className="btn btn-secondary" onClick={() => setShowAdmin(false)}>
+              {t.backButton}
+            </button>
+          </div>
+        </header>
+
+        {adminToken ? (
+          <AdminDashboard
+            token={adminToken}
+            language={language}
+            onLogout={handleLogout}
+          />
+        ) : (
+          <AdminLogin
+            onLogin={setAdminToken}
+            language={language}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="app" dir="rtl">
@@ -198,6 +244,12 @@ function App() {
       <TreatmentsSection data={t.treatments} />
       <BookingSection data={t.booking} language={language} />
       <ContactSection data={t.contact} />
+
+      <div className="admin-entry-fixed">
+        <button className="btn btn-primary" onClick={() => setShowAdmin(true)}>
+          {t.adminButton}
+        </button>
+      </div>
     </div>
   );
 }

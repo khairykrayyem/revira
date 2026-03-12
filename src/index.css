@@ -106,6 +106,8 @@ a {
   backdrop-filter: blur(10px);
 }
 
+
+
 /* HEADER */
 header {
   position: sticky;
@@ -193,6 +195,8 @@ header {
     transform: rotate(360deg);
   }
 }
+
+
 
 /* HERO */
 .hero {
@@ -391,6 +395,7 @@ header {
   }
 }
 
+
 /* ABOUT */
 .about-box {
   padding: 36px;
@@ -478,6 +483,7 @@ header {
   border-radius: 999px;
 }
 
+
 /* BOOKING */
 .booking-box {
   padding: 38px;
@@ -497,6 +503,7 @@ header {
   gap: 16px;
   flex-wrap: wrap;
 }
+
 
 /* CONTACT */
 .contact-grid {
@@ -526,6 +533,7 @@ header {
   color: white;
 }
 
+
 /* FOOTER */
 .footer {
   text-align: center;
@@ -533,6 +541,7 @@ header {
   color: var(--text-soft);
   font-size: 0.95rem;
 }
+
 
 /* RESPONSIVE */
 @media (max-width: 992px) {
@@ -599,7 +608,19 @@ header {
     width: 320px;
     height: 320px;
   }
+  
+  .admin-topbar {
+    flex-direction: column;
+  }
+
+  .month-grid {
+    grid-template-columns: 1fr;
+  }
+  
+
 }
+
+
 /* ABOUT WITH BACKGROUND IMAGE */
 .about-section-bg {
   position: relative;
@@ -647,6 +668,8 @@ header {
     0 18px 50px rgba(0, 0, 0, 0.35),
     0 0 40px rgba(255, 255, 255, 0.03);
 }
+
+
 /* BOOKING REAL SYSTEM */
 .booking-layout {
   display: grid;
@@ -785,4 +808,170 @@ header {
   color: #111;
   border-color: white;
   font-weight: 700;
+}
+
+
+/* ADMIN */
+.admin-entry-fixed {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  z-index: 1000;
+}
+
+.admin-page {
+  min-height: 100vh;
+}
+
+.admin-login-card,
+.admin-card,
+.admin-actions-card {
+  padding: 30px;
+}
+
+.admin-login-card {
+  max-width: 520px;
+  margin: 40px auto 0;
+}
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.admin-login-btn {
+  width: 100%;
+}
+
+.admin-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.admin-main-title,
+.admin-main-subtitle {
+  text-align: right;
+}
+
+.admin-actions-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.admin-month-input {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: white;
+  border-radius: 14px;
+  padding: 12px 16px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.admin-card {
+  margin-top: 24px;
+}
+
+.admin-card-title {
+  font-size: 1.4rem;
+  margin-bottom: 22px;
+  color: white;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+}
+
+.month-day-card {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.month-day-date {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: white;
+}
+
+.month-day-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.month-stat {
+  font-size: 0.94rem;
+  color: var(--text-soft);
+}
+
+.month-stat-open {
+  color: #bfffd2;
+}
+
+.month-stat-booked {
+  color: #ffe2ae;
+}
+
+.month-stat-closed {
+  color: #ffc2c2;
+}
+
+.appointments-table-wrap {
+  overflow-x: auto;
+}
+
+.appointments-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.appointments-table th,
+.appointments-table td {
+  text-align: right;
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  color: white;
+  vertical-align: top;
+}
+
+.appointments-table th {
+  color: var(--text-soft);
+  font-weight: 600;
+}
+
+.appointment-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mini-btn {
+  border: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 0.88rem;
+}
+
+.mini-btn-confirm {
+  background: rgba(80, 200, 120, 0.16);
+  color: #d8ffe4;
+  border: 1px solid rgba(80, 200, 120, 0.28);
+}
+
+.mini-btn-cancel {
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffd2d2;
+  border: 1px solid rgba(255, 80, 80, 0.24);
 }
