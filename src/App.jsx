@@ -3,7 +3,8 @@ import Header from "./components/Header";
 import HeroSection from "./components/HeroSection";
 import AboutSection from "./components/AboutSection";
 import TreatmentsSection from "./components/TreatmentsSection";
-import BookingSection from "./components/BookingSection";
+//import BookingSection from "./components/BookingSection";//
+import BookingCalendar from "./components/BookingCalendar";
 import ContactSection from "./components/ContactSection";
 import AdminLogin from "./admin/AdminLogin";
 import AdminDashboard from "./admin/AdminDashboard";
@@ -242,7 +243,7 @@ function App() {
       <HeroSection data={t.hero} />
       <AboutSection data={t.about} />
       <TreatmentsSection data={t.treatments} />
-      <BookingSection data={t.booking} language={language} />
+      <BookingCalendar data={t.booking} language={language} />
       <ContactSection data={t.contact} />
 
       <div className="admin-entry-fixed">

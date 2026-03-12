@@ -608,7 +608,7 @@ header {
     width: 320px;
     height: 320px;
   }
-  
+
   .admin-topbar {
     flex-direction: column;
   }
@@ -616,7 +616,9 @@ header {
   .month-grid {
     grid-template-columns: 1fr;
   }
-  
+    .booking-calendar-layout {
+    grid-template-columns: 1fr;
+  }
 
 }
 
@@ -974,4 +976,80 @@ header {
   background: rgba(255, 80, 80, 0.12);
   color: #ffd2d2;
   border: 1px solid rgba(255, 80, 80, 0.24);
+}
+
+/* BOOKING CALENDAR */
+.booking-calendar-layout {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.booking-calendar-card,
+.booking-form-card {
+  padding: 28px;
+}
+
+.revira-calendar {
+  width: 100%;
+  background: transparent !important;
+  border: none !important;
+  color: white;
+}
+
+.revira-calendar .react-calendar__navigation button {
+  color: white;
+  background: transparent;
+  border-radius: 12px;
+  min-width: 44px;
+}
+
+.revira-calendar .react-calendar__month-view__weekdays {
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
+.revira-calendar .react-calendar__tile {
+  background: rgba(255,255,255,0.04);
+  color: white;
+  border-radius: 12px;
+  margin: 4px 0;
+  padding: 14px 8px;
+}
+
+.revira-calendar .react-calendar__tile:enabled:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.revira-calendar .react-calendar__tile--active {
+  background: white !important;
+  color: #111 !important;
+}
+
+.revira-calendar .react-calendar__tile--now {
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.selected-date-label {
+  margin-top: 18px;
+  margin-bottom: 18px;
+  color: white;
+  font-weight: 600;
+}
+
+.day-slots-box {
+  margin-top: 18px;
+}
+
+.day-slots-title {
+  margin-bottom: 14px;
+  color: white;
+  font-size: 1.05rem;
+}
+
+.calendar-slots-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
