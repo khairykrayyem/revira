@@ -1356,13 +1356,14 @@ header {
 
 .month-day-card {
   width: 100%;
-  border: 1px solid #d9d9d9;
-  background: #fff;
-  border-radius: 16px;
-  padding: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  border-radius: 18px;
+  padding: 18px;
   text-align: start;
   cursor: pointer;
   transition: 0.2s ease;
+  color: white;
 }
 
 .month-day-card:hover {
@@ -1370,8 +1371,8 @@ header {
 }
 
 .month-day-card-active {
-  border: 2px solid #2f7d57;
-  box-shadow: 0 0 0 3px rgba(47, 125, 87, 0.12);
+  border: 2px solid rgba(255,255,255,0.22);
+  box-shadow: 0 0 0 3px rgba(255,255,255,0.06);
 }
 
 .day-slots-admin-list {
@@ -1384,10 +1385,10 @@ header {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid rgba(255,255,255,0.08);
   border-radius: 14px;
   padding: 14px;
-  background: #fff;
+  background: rgba(255,255,255,0.03);
 }
 
 .slot-status {
