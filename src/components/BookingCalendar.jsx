@@ -11,7 +11,7 @@ function BookingCalendar({ data, language }) {
   const [loadingSubmit, setLoadingSubmit] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-
+const [whatsappUrl, setWhatsappUrl] = useState("");
   const [formData, setFormData] = useState({
     clientName: "",
     clientPhone: "",
@@ -98,9 +98,9 @@ function BookingCalendar({ data, language }) {
       setSelectedSlotId("");
       await fetchDaySlots(selectedDate);
 
-      if (result.whatsappUrl) {
-        window.open(result.whatsappUrl, "_blank");
-      }
+if (result.whatsappUrl) {
+  setWhatsappUrl(result.whatsappUrl);
+}
     } catch (err) {
       setError(err.message);
     } finally {
@@ -238,6 +238,17 @@ function BookingCalendar({ data, language }) {
                   {successMessage}
                 </div>
               )}
+
+              {whatsappUrl && (
+                <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-secondary booking-submit-btn"
+                >
+                    {language === "he" ? "המשך לוואטסאפ" : "المتابعة إلى واتساب"}
+                </a>
+                )}
 
               <button
                 type="submit"
