@@ -1,0 +1,226 @@
+/* BOOKING */
+.booking-box {
+  padding: 38px;
+  text-align: center;
+}
+
+.booking-box p {
+  color: var(--text-soft);
+  line-height: 2;
+  margin-bottom: 24px;
+  font-size: 1.03rem;
+}
+
+.booking-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* BOOKING REAL SYSTEM */
+.booking-layout {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.booking-form-card,
+.booking-slots-card,
+.booking-calendar-card {
+  padding: 28px;
+}
+
+.booking-card-title {
+  font-size: 1.4rem;
+  margin-bottom: 22px;
+  color: white;
+}
+
+.booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-group label {
+  color: white;
+  font-size: 0.95rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: white;
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 1rem;
+  outline: none;
+  transition: 0.3s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: rgba(255,255,255,0.28);
+  background: rgba(255,255,255,0.08);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: rgba(255,255,255,0.45);
+}
+
+.booking-submit-btn {
+  margin-top: 6px;
+  width: 100%;
+}
+
+.booking-message {
+  padding: 14px 16px;
+  border-radius: 14px;
+  font-size: 0.95rem;
+}
+
+.error-message {
+  background: rgba(255, 80, 80, 0.12);
+  border: 1px solid rgba(255, 80, 80, 0.24);
+  color: #ffd2d2;
+}
+
+.success-message {
+  background: rgba(80, 200, 120, 0.12);
+  border: 1px solid rgba(80, 200, 120, 0.24);
+  color: #d8ffe4;
+}
+
+.booking-empty-state {
+  color: var(--text-soft);
+  line-height: 1.9;
+}
+
+.booking-days-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-height: 680px;
+  overflow-y: auto;
+  padding-left: 6px;
+}
+
+.booking-day-block {
+  padding: 18px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+}
+
+.booking-day-header {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: white;
+}
+
+.booking-slots-grid,
+.calendar-slots-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.slot-btn {
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: 0.3s ease;
+}
+
+.slot-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.slot-btn-active {
+  background: white;
+  color: #111;
+  border-color: white;
+  font-weight: 700;
+}
+
+/* BOOKING CALENDAR */
+.booking-calendar-layout {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.revira-calendar {
+  width: 100%;
+  background: transparent !important;
+  border: none !important;
+  color: white;
+}
+
+.revira-calendar .react-calendar__navigation button {
+  color: white;
+  background: transparent;
+  border-radius: 12px;
+  min-width: 44px;
+}
+
+.revira-calendar .react-calendar__month-view__weekdays {
+  color: var(--text-soft);
+  margin-bottom: 10px;
+}
+
+.revira-calendar .react-calendar__tile {
+  background: rgba(255,255,255,0.04);
+  color: white;
+  border-radius: 12px;
+  margin: 4px 0;
+  padding: 14px 8px;
+}
+
+.revira-calendar .react-calendar__tile:enabled:hover {
+  background: rgba(255,255,255,0.12);
+}
+
+.revira-calendar .react-calendar__tile--active {
+  background: white !important;
+  color: #111 !important;
+}
+
+.revira-calendar .react-calendar__tile--now {
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.selected-date-label {
+  margin-top: 18px;
+  margin-bottom: 18px;
+  color: white;
+  font-weight: 600;
+}
+
+.day-slots-box {
+  margin-top: 18px;
+}
+
+.day-slots-title {
+  margin-bottom: 14px;
+  color: white;
+  font-size: 1.05rem;
+}
