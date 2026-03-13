@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import AppointmentsTable from "./AppointmentsTable";
 import MonthCalendar from "./MonthCalendar";
+import DaySlotsManager from "./DaySlotsManager";
 import {
   getAppointmentsRequest,
+  getDaySlotsRequest,
   getMonthOverviewRequest,
   openRangeSlotsRequest,
   updateAppointmentRequest,
+  updateDaySlotsRequest,
+  updateSlotRequest,
 } from "../services/adminApi";
 
 function AdminDashboard({ token, language, onLogout }) {
@@ -14,7 +18,9 @@ function AdminDashboard({ token, language, onLogout }) {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
   });
 
+  const [selectedDate, setSelectedDate] = useState("");
   const [monthData, setMonthData] = useState([]);
+  const [daySlots, setDaySlots] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState("");
@@ -43,15 +49,16 @@ function AdminDashboard({ token, language, onLogout }) {
 
   const formatDate = (dateObj) => {
     const year = dateObj.getFullYear();
-    const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const monthValue = String(dateObj.getMonth() + 1).padStart(2, "0");
     const day = String(dateObj.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return `${year}-${monthValue}-${day}`;
   };
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError("");
+
       const [monthRes, appointmentsRes] = await Promise.all([
         getMonthOverviewRequest(token, month),
         getAppointmentsRequest(token),
@@ -66,9 +73,27 @@ function AdminDashboard({ token, language, onLogout }) {
     }
   };
 
+  const loadSelectedDaySlots = async (date) => {
+    if (!date) {
+      setDaySlots([]);
+      return;
+    }
+
+    try {
+      const slots = await getDaySlotsRequest(token, date);
+      setDaySlots(slots);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, [month]);
+
+  useEffect(() => {
+    loadSelectedDaySlots(selectedDate);
+  }, [selectedDate]);
 
   const handleOpenRange = async (daysToAdd) => {
     try {
@@ -91,6 +116,84 @@ function AdminDashboard({ token, language, onLogout }) {
       );
 
       await loadData();
+      if (selectedDate) {
+        await loadSelectedDaySlots(selectedDate);
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleSelectDay = async (date) => {
+    setSelectedDate(date);
+    setActionMessage("");
+    setError("");
+  };
+
+  const handleOpenDay = async () => {
+    if (!selectedDate) return;
+
+    try {
+      setError("");
+      setActionMessage("");
+
+      await updateDaySlotsRequest(token, selectedDate, "open");
+
+      setActionMessage(
+        language === "he"
+          ? "היום נפתח בהצלחה"
+          : "تم فتح اليوم بنجاح"
+      );
+
+      await loadData();
+      await loadSelectedDaySlots(selectedDate);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleCloseDay = async () => {
+    if (!selectedDate) return;
+
+    try {
+      setError("");
+      setActionMessage("");
+
+      await updateDaySlotsRequest(token, selectedDate, "close");
+
+      setActionMessage(
+        language === "he"
+          ? "היום נסגר בהצלחה"
+          : "تم إغلاق اليوم بنجاح"
+      );
+
+      await loadData();
+      await loadSelectedDaySlots(selectedDate);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleToggleSlot = async (slot) => {
+    try {
+      setError("");
+      setActionMessage("");
+
+      const isClosing = slot.status === "available";
+
+      await updateSlotRequest(token, slot._id, {
+        isOpen: !isClosing,
+        status: isClosing ? "closed" : "available",
+      });
+
+      setActionMessage(
+        language === "he"
+          ? "השעה עודכנה בהצלחה"
+          : "تم تحديث الساعة بنجاح"
+      );
+
+      await loadData();
+      await loadSelectedDaySlots(selectedDate);
     } catch (err) {
       setError(err.message);
     }
@@ -110,6 +213,9 @@ function AdminDashboard({ token, language, onLogout }) {
       );
 
       await loadData();
+      if (selectedDate) {
+        await loadSelectedDaySlots(selectedDate);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -161,7 +267,22 @@ function AdminDashboard({ token, language, onLogout }) {
           <p className="booking-empty-state">{labels.loading}</p>
         ) : (
           <>
-            <MonthCalendar monthData={monthData} language={language} />
+            <MonthCalendar
+              monthData={monthData}
+              language={language}
+              selectedDate={selectedDate}
+              onDaySelect={handleSelectDay}
+            />
+
+            <DaySlotsManager
+              selectedDate={selectedDate}
+              daySlots={daySlots}
+              onOpenDay={handleOpenDay}
+              onCloseDay={handleCloseDay}
+              onToggleSlot={handleToggleSlot}
+              language={language}
+            />
+
             <AppointmentsTable
               appointments={appointments}
               onUpdateStatus={handleUpdateAppointment}

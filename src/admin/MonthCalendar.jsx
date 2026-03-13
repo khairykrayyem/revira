@@ -1,4 +1,4 @@
-function MonthCalendar({ monthData, language }) {
+function MonthCalendar({ monthData, language, selectedDate, onDaySelect }) {
   const labels =
     language === "he"
       ? {
@@ -25,7 +25,14 @@ function MonthCalendar({ monthData, language }) {
       ) : (
         <div className="month-grid">
           {monthData.map((day) => (
-            <div className="month-day-card" key={day.date}>
+            <button
+              type="button"
+              className={`month-day-card ${
+                selectedDate === day.date ? "month-day-card-active" : ""
+              }`}
+              key={day.date}
+              onClick={() => onDaySelect(day.date)}
+            >
               <div className="month-day-date">{day.date}</div>
 
               <div className="month-day-stats">
@@ -41,7 +48,7 @@ function MonthCalendar({ monthData, language }) {
                   {labels.closed}: {day.closedCount}
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}

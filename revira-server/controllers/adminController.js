@@ -104,9 +104,76 @@ export const openRangeSlots = async (req, res) => {
   }
 };
 
+export const updateDaySlots = async (req, res) => {
+  try {
+    const { date } = req.params;
+    const { action, times } = req.body;
+
+    if (!date) {
+      return res.status(400).json({ message: "date is required" });
+    }
+
+    if (!["open", "close"].includes(action)) {
+      return res.status(400).json({ message: "action must be open or close" });
+    }
+
+    const selectedTimes = Array.isArray(times) && times.length ? times : DEFAULT_TIMES;
+
+    if (action === "open") {
+      for (const time of selectedTimes) {
+        const existingSlot = await Slot.findOne({
+          date,
+          startTime: time.startTime
+        });
+
+        if (!existingSlot) {
+          await Slot.create({
+            date,
+            startTime: time.startTime,
+            endTime: time.endTime,
+            isOpen: true,
+            status: "available"
+          });
+          continue;
+        }
+
+        if (existingSlot.status !== "booked") {
+          existingSlot.isOpen = true;
+          existingSlot.status = "available";
+          await existingSlot.save();
+        }
+      }
+    }
+
+    if (action === "close") {
+      await Slot.updateMany(
+        {
+          date,
+          status: { $ne: "booked" }
+        },
+        {
+          $set: {
+            isOpen: false,
+            status: "closed"
+          }
+        }
+      );
+    }
+
+    const updatedSlots = await Slot.find({ date }).sort({ startTime: 1 });
+
+    return res.json({
+      message: `Day slots ${action}ed successfully`,
+      slots: updatedSlots
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 export const getMonthOverview = async (req, res) => {
   try {
-    const { month } = req.query; // YYYY-MM
+    const { month } = req.query;
 
     if (!month) {
       return res.status(400).json({ message: "month is required" });
@@ -170,8 +237,19 @@ export const updateSlot = async (req, res) => {
       return res.status(404).json({ message: "Slot not found" });
     }
 
-    if (typeof isOpen === "boolean") slot.isOpen = isOpen;
-    if (status) slot.status = status;
+    if (slot.status === "booked") {
+      return res.status(400).json({ message: "Booked slot cannot be changed manually" });
+    }
+
+    if (typeof isOpen === "boolean") {
+      slot.isOpen = isOpen;
+    }
+
+    if (status) {
+      slot.status = status;
+    } else {
+      slot.status = slot.isOpen ? "available" : "closed";
+    }
 
     await slot.save();
 
@@ -212,6 +290,7 @@ export const updateAppointment = async (req, res) => {
 
     if (status === "cancelled") {
       await Slot.findByIdAndUpdate(appointment.slotId, {
+        isOpen: true,
         status: "available",
         appointmentId: null
       });
@@ -219,6 +298,7 @@ export const updateAppointment = async (req, res) => {
 
     if (status === "confirmed") {
       await Slot.findByIdAndUpdate(appointment.slotId, {
+        isOpen: false,
         status: "booked"
       });
     }

@@ -1353,3 +1353,57 @@ header {
     min-width: 760px;
   }
 }
+
+.month-day-card {
+  width: 100%;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  border-radius: 16px;
+  padding: 14px;
+  text-align: start;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.month-day-card:hover {
+  transform: translateY(-2px);
+}
+
+.month-day-card-active {
+  border: 2px solid #2f7d57;
+  box-shadow: 0 0 0 3px rgba(47, 125, 87, 0.12);
+}
+
+.day-slots-admin-list {
+  display: grid;
+  gap: 12px;
+}
+
+.day-slot-admin-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 14px;
+  padding: 14px;
+  background: #fff;
+}
+
+.slot-status {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.slot-status-available {
+  color: #2f7d57;
+}
+
+.slot-status-closed {
+  color: #b54747;
+}
+
+.slot-status-booked {
+  color: #8a5a00;
+}
