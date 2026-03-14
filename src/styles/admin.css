@@ -245,3 +245,11 @@
   font-size: 0.92rem;
   line-height: 1.7;
 }
+.month-day-card-past {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.month-day-card:disabled {
+  cursor: not-allowed;
+}

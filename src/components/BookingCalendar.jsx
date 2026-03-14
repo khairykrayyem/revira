@@ -84,8 +84,8 @@ const [whatsappUrl, setWhatsappUrl] = useState("");
 
       setSuccessMessage(
         language === "he"
-          ? "התור נקבע בהצלחה"
-          : "تم حجز الموعد بنجاح"
+          ? "התור נקבע בהצלחהבקשת התור נשלחה וממתינה לאישור מנהל המרפאה"
+          : "تم إرسال طلب الموعد وهو بانتظار موافقة مدير العيادة"
       );
 
       setFormData({

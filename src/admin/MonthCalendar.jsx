@@ -13,6 +13,7 @@ function MonthCalendar({
           booked: "תפוסים",
           closed: "סגורים",
           noSlotsYet: "אין שעות עדיין",
+          pastDay: "יום שעבר",
         }
       : {
           title: "نظرة عامة على الشهر",
@@ -20,6 +21,7 @@ function MonthCalendar({
           booked: "محجوز",
           closed: "مغلق",
           noSlotsYet: "لا توجد ساعات بعد",
+          pastDay: "يوم سابق",
         };
 
   const getDayName = (dateString) => {
@@ -58,6 +60,15 @@ function MonthCalendar({
     return `${day}/${monthValue}`;
   };
 
+  const getTodayString = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const monthValue = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+
+    return `${year}-${monthValue}-${day}`;
+  };
+
   const buildMonthDays = () => {
     if (!month) return [];
 
@@ -85,6 +96,7 @@ function MonthCalendar({
     return fullMonthDays;
   };
 
+  const todayString = getTodayString();
   const fullMonthDays = buildMonthDays();
 
   return (
@@ -95,22 +107,32 @@ function MonthCalendar({
         {fullMonthDays.map((day) => {
           const totalSlots = day.openCount + day.bookedCount + day.closedCount;
           const isEmptyDay = totalSlots === 0;
+          const isPastDay = day.date < todayString;
 
           return (
             <button
               type="button"
               className={`month-day-card ${
                 selectedDate === day.date ? "month-day-card-active" : ""
-              } ${isEmptyDay ? "month-day-card-empty" : ""}`}
+              } ${isEmptyDay ? "month-day-card-empty" : ""} ${
+                isPastDay ? "month-day-card-past" : ""
+              }`}
               key={day.date}
-              onClick={() => onDaySelect(day.date)}
+              onClick={() => {
+                if (!isPastDay) {
+                  onDaySelect(day.date);
+                }
+              }}
+              disabled={isPastDay}
             >
               <div className="month-day-date">
                 <div className="month-day-name">{getDayName(day.date)}</div>
                 <div className="month-day-number">{formatShortDate(day.date)}</div>
               </div>
 
-              {isEmptyDay ? (
+              {isPastDay ? (
+                <div className="month-day-empty-label">{labels.pastDay}</div>
+              ) : isEmptyDay ? (
                 <div className="month-day-empty-label">{labels.noSlotsYet}</div>
               ) : (
                 <div className="month-day-stats">
