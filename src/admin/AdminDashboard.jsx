@@ -267,12 +267,13 @@ function AdminDashboard({ token, language, onLogout }) {
           <p className="booking-empty-state">{labels.loading}</p>
         ) : (
           <>
-            <MonthCalendar
-              monthData={monthData}
-              language={language}
-              selectedDate={selectedDate}
-              onDaySelect={handleSelectDay}
-            />
+                <MonthCalendar
+                month={month}
+                monthData={monthData}
+                language={language}
+                selectedDate={selectedDate}
+                onDaySelect={handleSelectDay}
+                />
 
             <DaySlotsManager
               selectedDate={selectedDate}

@@ -12,7 +12,6 @@ function MonthCalendar({
           open: "פנויים",
           booked: "תפוסים",
           closed: "סגורים",
-          emptyState: "אין נתונים עדיין",
           noSlotsYet: "אין שעות עדיין",
         }
       : {
@@ -20,9 +19,44 @@ function MonthCalendar({
           open: "متاح",
           booked: "محجوز",
           closed: "مغلق",
-          emptyState: "لا توجد بيانات بعد",
           noSlotsYet: "لا توجد ساعات بعد",
         };
+
+  const getDayName = (dateString) => {
+    const date = new Date(dateString);
+
+    const daysHe = [
+      "ראשון",
+      "שני",
+      "שלישי",
+      "רביעי",
+      "חמישי",
+      "שישי",
+      "שבת",
+    ];
+
+    const daysAr = [
+      "الأحد",
+      "الاثنين",
+      "الثلاثاء",
+      "الأربعاء",
+      "الخميس",
+      "الجمعة",
+      "السبت",
+    ];
+
+    return language === "he"
+      ? daysHe[date.getDay()]
+      : daysAr[date.getDay()];
+  };
+
+  const formatShortDate = (dateString) => {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, "0");
+    const monthValue = String(date.getMonth() + 1).padStart(2, "0");
+
+    return `${day}/${monthValue}`;
+  };
 
   const buildMonthDays = () => {
     if (!month) return [];
@@ -71,7 +105,10 @@ function MonthCalendar({
               key={day.date}
               onClick={() => onDaySelect(day.date)}
             >
-              <div className="month-day-date">{day.date}</div>
+              <div className="month-day-date">
+                <div className="month-day-name">{getDayName(day.date)}</div>
+                <div className="month-day-number">{formatShortDate(day.date)}</div>
+              </div>
 
               {isEmptyDay ? (
                 <div className="month-day-empty-label">{labels.noSlotsYet}</div>
