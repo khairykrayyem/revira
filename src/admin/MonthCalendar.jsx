@@ -1,4 +1,10 @@
-function MonthCalendar({ monthData, language, selectedDate, onDaySelect }) {
+function MonthCalendar({
+  month,
+  monthData,
+  language,
+  selectedDate,
+  onDaySelect,
+}) {
   const labels =
     language === "he"
       ? {
@@ -6,52 +12,88 @@ function MonthCalendar({ monthData, language, selectedDate, onDaySelect }) {
           open: "פנויים",
           booked: "תפוסים",
           closed: "סגורים",
-          empty: "אין נתונים לחודש זה",
+          emptyState: "אין נתונים עדיין",
+          noSlotsYet: "אין שעות עדיין",
         }
       : {
           title: "نظرة عامة على الشهر",
           open: "متاح",
           booked: "محجوز",
           closed: "مغلق",
-          empty: "لا توجد بيانات لهذا الشهر",
+          emptyState: "لا توجد بيانات بعد",
+          noSlotsYet: "لا توجد ساعات بعد",
         };
+
+  const buildMonthDays = () => {
+    if (!month) return [];
+
+    const [year, monthNumber] = month.split("-").map(Number);
+    const totalDays = new Date(year, monthNumber, 0).getDate();
+
+    const monthMap = new Map(monthData.map((day) => [day.date, day]));
+    const fullMonthDays = [];
+
+    for (let day = 1; day <= totalDays; day += 1) {
+      const date = `${year}-${String(monthNumber).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const existingDay = monthMap.get(date);
+
+      fullMonthDays.push(
+        existingDay || {
+          date,
+          openCount: 0,
+          bookedCount: 0,
+          closedCount: 0,
+          noSlotsYet: true,
+        }
+      );
+    }
+
+    return fullMonthDays;
+  };
+
+  const fullMonthDays = buildMonthDays();
 
   return (
     <div className="card admin-card">
       <h3 className="admin-card-title">{labels.title}</h3>
 
-      {monthData.length === 0 ? (
-        <p className="booking-empty-state">{labels.empty}</p>
-      ) : (
-        <div className="month-grid">
-          {monthData.map((day) => (
+      <div className="month-grid">
+        {fullMonthDays.map((day) => {
+          const totalSlots = day.openCount + day.bookedCount + day.closedCount;
+          const isEmptyDay = totalSlots === 0;
+
+          return (
             <button
               type="button"
               className={`month-day-card ${
                 selectedDate === day.date ? "month-day-card-active" : ""
-              }`}
+              } ${isEmptyDay ? "month-day-card-empty" : ""}`}
               key={day.date}
               onClick={() => onDaySelect(day.date)}
             >
               <div className="month-day-date">{day.date}</div>
 
-              <div className="month-day-stats">
-                <div className="month-stat month-stat-open">
-                  {labels.open}: {day.openCount}
-                </div>
+              {isEmptyDay ? (
+                <div className="month-day-empty-label">{labels.noSlotsYet}</div>
+              ) : (
+                <div className="month-day-stats">
+                  <div className="month-stat month-stat-open">
+                    {labels.open}: {day.openCount}
+                  </div>
 
-                <div className="month-stat month-stat-booked">
-                  {labels.booked}: {day.bookedCount}
-                </div>
+                  <div className="month-stat month-stat-booked">
+                    {labels.booked}: {day.bookedCount}
+                  </div>
 
-                <div className="month-stat month-stat-closed">
-                  {labels.closed}: {day.closedCount}
+                  <div className="month-stat month-stat-closed">
+                    {labels.closed}: {day.closedCount}
+                  </div>
                 </div>
-              </div>
+              )}
             </button>
-          ))}
-        </div>
-      )}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -211,3 +211,12 @@
   color: #ffd2d2;
   border: 1px solid rgba(255, 80, 80, 0.24);
 }
+.month-day-card-empty {
+  opacity: 0.88;
+}
+
+.month-day-empty-label {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
