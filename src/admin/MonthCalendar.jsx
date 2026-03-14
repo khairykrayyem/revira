@@ -8,7 +8,6 @@ function MonthCalendar({
   const labels =
     language === "he"
       ? {
-          title: "סקירת חודש",
           open: "פנויים",
           booked: "תפוסים",
           closed: "סגורים",
@@ -16,7 +15,6 @@ function MonthCalendar({
           pastDay: "יום שעבר",
         }
       : {
-          title: "نظرة عامة على الشهر",
           open: "متاح",
           booked: "محجوز",
           closed: "مغلق",
@@ -27,29 +25,10 @@ function MonthCalendar({
   const getDayName = (dateString) => {
     const date = new Date(dateString);
 
-    const daysHe = [
-      "ראשון",
-      "שני",
-      "שלישי",
-      "רביעי",
-      "חמישי",
-      "שישי",
-      "שבת",
-    ];
+    const daysHe = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+    const daysAr = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 
-    const daysAr = [
-      "الأحد",
-      "الاثنين",
-      "الثلاثاء",
-      "الأربعاء",
-      "الخميس",
-      "الجمعة",
-      "السبت",
-    ];
-
-    return language === "he"
-      ? daysHe[date.getDay()]
-      : daysAr[date.getDay()];
+    return language === "he" ? daysHe[date.getDay()] : daysAr[date.getDay()];
   };
 
   const formatShortDate = (dateString) => {
@@ -88,7 +67,6 @@ function MonthCalendar({
           openCount: 0,
           bookedCount: 0,
           closedCount: 0,
-          noSlotsYet: true,
         }
       );
     }
@@ -100,9 +78,7 @@ function MonthCalendar({
   const fullMonthDays = buildMonthDays();
 
   return (
-    <div className="card admin-card">
-      <h3 className="admin-card-title">{labels.title}</h3>
-
+    <div className="admin-collapse-content">
       <div className="month-grid">
         {fullMonthDays.map((day) => {
           const totalSlots = day.openCount + day.bookedCount + day.closedCount;
@@ -119,9 +95,7 @@ function MonthCalendar({
               }`}
               key={day.date}
               onClick={() => {
-                if (!isPastDay) {
-                  onDaySelect(day.date);
-                }
+                if (!isPastDay) onDaySelect(day.date);
               }}
               disabled={isPastDay}
             >
@@ -139,11 +113,9 @@ function MonthCalendar({
                   <div className="month-stat month-stat-open">
                     {labels.open}: {day.openCount}
                   </div>
-
                   <div className="month-stat month-stat-booked">
                     {labels.booked}: {day.bookedCount}
                   </div>
-
                   <div className="month-stat month-stat-closed">
                     {labels.closed}: {day.closedCount}
                   </div>

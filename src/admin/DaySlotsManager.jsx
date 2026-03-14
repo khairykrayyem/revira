@@ -9,7 +9,6 @@ function DaySlotsManager({
   const labels =
     language === "he"
       ? {
-          title: "ניהול שעות ליום",
           selectedDay: "יום נבחר",
           noDay: "יש לבחור יום מהחודש",
           noSlots: "אין עדיין שעות ליום זה",
@@ -22,7 +21,6 @@ function DaySlotsManager({
           closed: "סגור",
         }
       : {
-          title: "إدارة ساعات اليوم",
           selectedDay: "اليوم المختار",
           noDay: "يجب اختيار يوم من الشهر",
           noSlots: "لا توجد ساعات لهذا اليوم بعد",
@@ -42,9 +40,7 @@ function DaySlotsManager({
   };
 
   return (
-    <div className="card admin-card">
-      <h3 className="admin-card-title">{labels.title}</h3>
-
+    <div className="admin-collapse-content">
       {!selectedDate ? (
         <p className="booking-empty-state">{labels.noDay}</p>
       ) : (

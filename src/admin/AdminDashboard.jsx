@@ -25,6 +25,8 @@ function AdminDashboard({ token, language, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState("");
   const [error, setError] = useState("");
+  const [isMonthCalendarOpen, setIsMonthCalendarOpen] = useState(true);
+const [isDayManagerOpen, setIsDayManagerOpen] = useState(true); 
 
   const labels =
     language === "he"
@@ -94,6 +96,17 @@ function AdminDashboard({ token, language, onLogout }) {
   useEffect(() => {
     loadSelectedDaySlots(selectedDate);
   }, [selectedDate]);
+
+  useEffect(() => {
+  const interval = setInterval(() => {
+    loadData();
+    if (selectedDate) {
+      loadSelectedDaySlots(selectedDate);
+    }
+  }, 15000);
+
+  return () => clearInterval(interval);
+}, [selectedDate, month]);
 
   const handleOpenRange = async (daysToAdd) => {
     try {
@@ -315,23 +328,48 @@ const handleUpdateAppointment = async (appointment, status) => {
           <p className="booking-empty-state">{labels.loading}</p>
         ) : (
           <>
-                <MonthCalendar
-                month={month}
-                monthData={monthData}
-                language={language}
-                selectedDate={selectedDate}
-                onDaySelect={handleSelectDay}
-                />
+<div className="card admin-card">
+  <button
+    type="button"
+    className="admin-collapse-toggle"
+    onClick={() => setIsMonthCalendarOpen((prev) => !prev)}
+  >
+    <span>{language === "he" ? "סקירת חודש" : "نظرة عامة على الشهر"}</span>
+    <span>{isMonthCalendarOpen ? "−" : "+"}</span>
+  </button>
 
-            <DaySlotsManager
-              selectedDate={selectedDate}
-              daySlots={daySlots}
-              onOpenDay={handleOpenDay}
-              onCloseDay={handleCloseDay}
-              onToggleSlot={handleToggleSlot}
-              language={language}
-            />
+  {isMonthCalendarOpen && (
+    <MonthCalendar
+      month={month}
+      monthData={monthData}
+      language={language}
+      selectedDate={selectedDate}
+      onDaySelect={handleSelectDay}
+    />
+  )}
+</div>
 
+<div className="card admin-card">
+  <button
+    type="button"
+    className="admin-collapse-toggle"
+    onClick={() => setIsDayManagerOpen((prev) => !prev)}
+  >
+    <span>{language === "he" ? "ניהול שעות היום" : "إدارة ساعات اليوم"}</span>
+    <span>{isDayManagerOpen ? "−" : "+"}</span>
+  </button>
+
+  {isDayManagerOpen && (
+    <DaySlotsManager
+      selectedDate={selectedDate}
+      daySlots={daySlots}
+      onOpenDay={handleOpenDay}
+      onCloseDay={handleCloseDay}
+      onToggleSlot={handleToggleSlot}
+      language={language}
+    />
+  )}
+</div>
             <AppointmentsTable
               appointments={appointments}
               onUpdateStatus={handleUpdateAppointment}

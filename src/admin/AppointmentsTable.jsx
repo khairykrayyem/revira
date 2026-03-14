@@ -46,11 +46,56 @@ function AppointmentsTable({ appointments, onUpdateStatus, language }) {
     return "status-badge status-badge-pending";
   };
 
+  const getDayName = (dateString) => {
+    const date = new Date(dateString);
+
+    const daysHe = ["ראשון", "שני", "שלישי", "רביעי", "חמישי", "שישי", "שבת"];
+    const daysAr = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+    return language === "he" ? daysHe[date.getDay()] : daysAr[date.getDay()];
+  };
+
+  const formatShortDate = (dateString) => {
+    const date = new Date(dateString);
+    return `${getDayName(dateString)} ${date.getDate()}.${date.getMonth() + 1}`;
+  };
+
+  const getTodayStart = () => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  };
+
+  const getAppointmentDateTime = (appointment) => {
+    const date = appointment.slotId?.date;
+    const startTime = appointment.slotId?.startTime;
+
+    if (!date || !startTime) return null;
+
+    const [year, month, day] = date.split("-").map(Number);
+    const [hours, minutes] = startTime.split(":").map(Number);
+
+    return new Date(year, month - 1, day, hours, minutes);
+  };
+
+  const visibleAppointments = [...appointments]
+    .filter((appointment) => {
+      const appointmentDateTime = getAppointmentDateTime(appointment);
+      if (!appointmentDateTime) return false;
+
+      return appointmentDateTime >= getTodayStart();
+    })
+    .sort((a, b) => {
+      const dateA = getAppointmentDateTime(a);
+      const dateB = getAppointmentDateTime(b);
+
+      return dateA - dateB;
+    });
+
   return (
     <div className="card admin-card">
       <h3 className="admin-card-title">{labels.title}</h3>
 
-      {appointments.length === 0 ? (
+      {visibleAppointments.length === 0 ? (
         <p className="booking-empty-state">{labels.empty}</p>
       ) : (
         <div className="appointments-table-wrap">
@@ -68,12 +113,12 @@ function AppointmentsTable({ appointments, onUpdateStatus, language }) {
             </thead>
 
             <tbody>
-              {appointments.map((appointment) => (
+              {visibleAppointments.map((appointment) => (
                 <tr key={appointment._id}>
                   <td>{appointment.clientName}</td>
                   <td>{appointment.clientPhone}</td>
                   <td>{appointment.treatment}</td>
-                  <td>{appointment.slotId?.date || "-"}</td>
+                  <td>{appointment.slotId?.date ? formatShortDate(appointment.slotId.date) : "-"}</td>
                   <td>
                     {appointment.slotId
                       ? `${appointment.slotId.startTime} - ${appointment.slotId.endTime}`
