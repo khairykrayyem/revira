@@ -12,33 +12,38 @@ function AppointmentsTable({ appointments, onUpdateStatus, language }) {
           actions: "פעולות",
           confirm: "אשר",
           cancel: "בטל",
+          empty: "אין תורים להצגה",
           pending: "ממתין",
           confirmed: "מאושר",
           cancelled: "בוטל",
-          empty: "אין תורים כרגע",
         }
       : {
           title: "قائمة المواعيد",
-          client: "الاسم",
+          client: "العميل",
           phone: "الهاتف",
           treatment: "العلاج",
           date: "التاريخ",
-          time: "الوقت",
+          time: "الساعة",
           status: "الحالة",
-          actions: "الإجراءات",
+          actions: "إجراءات",
           confirm: "تأكيد",
           cancel: "إلغاء",
+          empty: "لا توجد مواعيد للعرض",
           pending: "قيد الانتظار",
           confirmed: "مؤكد",
           cancelled: "ملغي",
-          empty: "لا توجد مواعيد حاليًا",
         };
 
-  const statusLabel = (status) => {
-    if (status === "pending") return labels.pending;
+  const getStatusLabel = (status) => {
     if (status === "confirmed") return labels.confirmed;
     if (status === "cancelled") return labels.cancelled;
-    return status;
+    return labels.pending;
+  };
+
+  const getStatusClass = (status) => {
+    if (status === "confirmed") return "status-badge status-badge-confirmed";
+    if (status === "cancelled") return "status-badge status-badge-cancelled";
+    return "status-badge status-badge-pending";
   };
 
   return (
@@ -74,7 +79,11 @@ function AppointmentsTable({ appointments, onUpdateStatus, language }) {
                       ? `${appointment.slotId.startTime} - ${appointment.slotId.endTime}`
                       : "-"}
                   </td>
-                  <td>{statusLabel(appointment.status)}</td>
+                  <td>
+                    <span className={getStatusClass(appointment.status)}>
+                      {getStatusLabel(appointment.status)}
+                    </span>
+                  </td>
                   <td>
                     <div className="appointment-actions">
                       <button

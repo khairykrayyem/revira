@@ -253,3 +253,33 @@
 .month-day-card:disabled {
   cursor: not-allowed;
 }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  border: 1px solid transparent;
+}
+
+.status-badge-confirmed {
+  background: rgba(80, 200, 120, 0.14);
+  color: #bfffd2;
+  border-color: rgba(80, 200, 120, 0.3);
+}
+
+.status-badge-cancelled {
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffd2d2;
+  border-color: rgba(255, 80, 80, 0.24);
+}
+
+.status-badge-pending {
+  background: rgba(255, 190, 80, 0.12);
+  color: #ffe2ae;
+  border-color: rgba(255, 190, 80, 0.24);
+}
