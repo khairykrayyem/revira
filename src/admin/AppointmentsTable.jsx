@@ -79,14 +79,14 @@ function AppointmentsTable({ appointments, onUpdateStatus, language }) {
                     <div className="appointment-actions">
                       <button
                         className="mini-btn mini-btn-confirm"
-                        onClick={() => onUpdateStatus(appointment._id, "confirmed")}
+                        onClick={() => onUpdateStatus(appointment, "confirmed")}
                       >
                         {labels.confirm}
                       </button>
 
                       <button
                         className="mini-btn mini-btn-cancel"
-                        onClick={() => onUpdateStatus(appointment._id, "cancelled")}
+                        onClick={() => onUpdateStatus(appointment, "cancelled")}
                       >
                         {labels.cancel}
                       </button>

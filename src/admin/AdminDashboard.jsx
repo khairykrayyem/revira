@@ -199,28 +199,76 @@ function AdminDashboard({ token, language, onLogout }) {
     }
   };
 
-  const handleUpdateAppointment = async (appointmentId, status) => {
-    try {
-      setError("");
-      setActionMessage("");
+  const normalizePhoneForWhatsApp = (phone) => {
+  if (!phone) return "";
 
-      await updateAppointmentRequest(token, appointmentId, status);
+  let cleaned = phone.replace(/\D/g, "");
 
-      setActionMessage(
-        language === "he"
-          ? "התור עודכן בהצלחה"
-          : "تم تحديث الموعد بنجاح"
-      );
+  if (cleaned.startsWith("0")) {
+    cleaned = `972${cleaned.slice(1)}`;
+  }
 
-      await loadData();
-      if (selectedDate) {
-        await loadSelectedDaySlots(selectedDate);
-      }
-    } catch (err) {
-      setError(err.message);
+  if (cleaned.startsWith("972")) {
+    return cleaned;
+  }
+
+  return cleaned;
+};
+
+const buildWhatsAppMessage = (appointment, status) => {
+  const clientName = appointment.clientName || "";
+  const date = appointment.slotId?.date || "";
+  const startTime = appointment.slotId?.startTime || "";
+  const treatment = appointment.treatment || "";
+
+  if (language === "he") {
+    if (status === "confirmed") {
+      return `שלום ${clientName}, מנהל המרפאה אישר את התור שלך לתאריך ${date} בשעה ${startTime}${treatment ? ` עבור ${treatment}` : ""}. נשמח לראותך.`;
     }
-  };
 
+    return `שלום ${clientName}, לצערנו התור שביקשת לתאריך ${date} בשעה ${startTime}${treatment ? ` עבור ${treatment}` : ""} לא אושר. נא לקבוע יום או שעה אחרת. תודה.`;
+  }
+
+  if (status === "confirmed") {
+    return `مرحبًا ${clientName}، لقد تم تأكيد موعدك بتاريخ ${date} الساعة ${startTime}${treatment ? ` من أجل ${treatment}` : ""}. يسعدنا استقبالكم.`;
+  }
+
+  return `مرحبًا ${clientName}، نعتذر، لم تتم الموافقة على موعدك بتاريخ ${date} الساعة ${startTime}${treatment ? ` من أجل ${treatment}` : ""}. يرجى حجز يوم أو ساعة أخرى. شكرًا.`;
+};
+
+const openAppointmentWhatsApp = (appointment, status) => {
+  const phone = normalizePhoneForWhatsApp(appointment.clientPhone);
+  if (!phone) return;
+
+  const message = buildWhatsAppMessage(appointment, status);
+  const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+  window.open(url, "_blank");
+};
+
+const handleUpdateAppointment = async (appointment, status) => {
+  try {
+    setError("");
+    setActionMessage("");
+
+    await updateAppointmentRequest(token, appointment._id, status);
+
+    setActionMessage(
+      language === "he"
+        ? "התור עודכן בהצלחה"
+        : "تم تحديث الموعد بنجاح"
+    );
+
+    await loadData();
+    if (selectedDate) {
+      await loadSelectedDaySlots(selectedDate);
+    }
+
+    openAppointmentWhatsApp(appointment, status);
+  } catch (err) {
+    setError(err.message);
+  }
+};
   return (
     <section className="section admin-page">
       <div className="container">
