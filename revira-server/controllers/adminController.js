@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 import AdminUser from "../models/AdminUser.js";
 import Appointment from "../models/Appointment.js";
 import Slot from "../models/Slot.js";
@@ -237,19 +238,27 @@ export const updateSlot = async (req, res) => {
       return res.status(404).json({ message: "Slot not found" });
     }
 
-    if (slot.status === "booked") {
-      return res.status(400).json({ message: "Booked slot cannot be changed manually" });
+    if (slot.status === "booked" || slot.appointmentId) {
+      return res.status(409).json({ message: "Owned slot cannot be changed manually" });
     }
 
-    if (typeof isOpen === "boolean") {
-      slot.isOpen = isOpen;
+    if (status === "booked") {
+      return res.status(400).json({ message: "A slot can only be booked through an appointment" });
     }
 
-    if (status) {
-      slot.status = status;
-    } else {
-      slot.status = slot.isOpen ? "available" : "closed";
+    const nextIsOpen = typeof isOpen === "boolean" ? isOpen : slot.isOpen;
+    const nextStatus = status || (nextIsOpen ? "available" : "closed");
+
+    const isValidManualState =
+      (nextIsOpen && nextStatus === "available") ||
+      (!nextIsOpen && nextStatus === "closed");
+
+    if (!isValidManualState) {
+      return res.status(400).json({ message: "Slot availability and status are inconsistent" });
     }
+
+    slot.isOpen = nextIsOpen;
+    slot.status = nextStatus;
 
     await slot.save();
 
@@ -275,32 +284,65 @@ export const getAppointments = async (_req, res) => {
 };
 
 export const updateAppointment = async (req, res) => {
+  let session;
+
   try {
+    session = await mongoose.startSession();
+
     const { id } = req.params;
     const { status } = req.body;
 
-    const appointment = await Appointment.findById(id);
-
-    if (!appointment) {
-      return res.status(404).json({ message: "Appointment not found" });
+    if (status && !["pending", "confirmed", "cancelled"].includes(status)) {
+      return res.status(400).json({ message: "Invalid appointment status" });
     }
 
-    appointment.status = status || appointment.status;
-    await appointment.save();
+    let appointment;
+    let resultStatus = 200;
+    let resultMessage = "Appointment updated successfully";
 
-    if (status === "cancelled") {
-      await Slot.findByIdAndUpdate(appointment.slotId, {
-        isOpen: true,
-        status: "available",
-        appointmentId: null
-      });
-    }
+    await session.withTransaction(async () => {
+      appointment = await Appointment.findById(id).session(session);
 
-    if (status === "confirmed") {
-      await Slot.findByIdAndUpdate(appointment.slotId, {
-        isOpen: false,
-        status: "booked"
-      });
+      if (!appointment) {
+        resultStatus = 404;
+        resultMessage = "Appointment not found";
+        return;
+      }
+
+      if (status === "cancelled") {
+        const slot = await Slot.findOneAndUpdate(
+          { _id: appointment.slotId, appointmentId: appointment._id },
+          { $set: { isOpen: true, status: "available", appointmentId: null } },
+          { new: true, session }
+        );
+
+        if (!slot) {
+          resultStatus = 409;
+          resultMessage = "Appointment no longer owns this slot";
+          return;
+        }
+      }
+
+      if (status === "confirmed") {
+        const slot = await Slot.findOneAndUpdate(
+          { _id: appointment.slotId, appointmentId: appointment._id },
+          { $set: { isOpen: false, status: "booked" } },
+          { new: true, session }
+        );
+
+        if (!slot) {
+          resultStatus = 409;
+          resultMessage = "Appointment no longer owns this slot";
+          return;
+        }
+      }
+
+      appointment.status = status || appointment.status;
+      await appointment.save({ session });
+    });
+
+    if (resultStatus !== 200) {
+      return res.status(resultStatus).json({ message: resultMessage });
     }
 
     return res.json({
@@ -308,6 +350,14 @@ export const updateAppointment = async (req, res) => {
       appointment
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: "Failed to update appointment" });
+  } finally {
+    if (session) {
+      try {
+        await session.endSession();
+      } catch {
+        // Cleanup failure must not replace the endpoint response.
+      }
+    }
   }
 };

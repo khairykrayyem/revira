@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
+    "test": "node --test --test-concurrency=1 tests",
     "seed-admin": "node utils/seedAdmin.js",
     "reset-admin-password": "node utils/resetAdminPassword.js"
   },
@@ -19,6 +20,8 @@
     "mongoose": "^8.6.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "mongodb-memory-server": "^10.4.3",
+    "nodemon": "^3.1.4",
+    "supertest": "^7.2.2"
   }
 }

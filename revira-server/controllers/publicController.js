@@ -1,5 +1,8 @@
 import Appointment from "../models/Appointment.js";
 import Slot from "../models/Slot.js";
+import mongoose from "mongoose";
+
+class BookingConflictError extends Error {}
 
 export const getOpenSlots = async (req, res) => {
   try {
@@ -22,35 +25,56 @@ export const getOpenSlots = async (req, res) => {
 };
 
 export const createAppointment = async (req, res) => {
+  let session;
+
   try {
+    session = await mongoose.startSession();
+
     const { slotId, clientName, clientPhone, treatment, notes, lang } = req.body;
 
     if (!slotId || !clientName || !clientPhone || !treatment) {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
-    const slot = await Slot.findById(slotId);
+    const appointmentId = new mongoose.Types.ObjectId();
+    let appointment;
+    let slot;
 
-    if (!slot) {
-      return res.status(404).json({ message: "Slot not found" });
-    }
+    await session.withTransaction(async () => {
+      slot = await Slot.findOneAndUpdate(
+        {
+          _id: slotId,
+          isOpen: true,
+          status: "available",
+          appointmentId: null
+        },
+        {
+          $set: {
+            isOpen: false,
+            status: "booked",
+            appointmentId
+          }
+        },
+        { new: true, session }
+      );
 
-    if (!slot.isOpen || slot.status !== "available") {
-      return res.status(400).json({ message: "Slot is not available" });
-    }
+      if (!slot) {
+        throw new BookingConflictError("Slot is no longer available");
+      }
 
-    const appointment = await Appointment.create({
-      slotId,
-      clientName,
-      clientPhone,
-      treatment,
-      notes,
-      lang
+      [appointment] = await Appointment.create(
+        [{
+          _id: appointmentId,
+          slotId,
+          clientName,
+          clientPhone,
+          treatment,
+          notes,
+          lang
+        }],
+        { session }
+      );
     });
-
-    slot.status = "booked";
-    slot.appointmentId = appointment._id;
-    await slot.save();
 
     const whatsappMessage = `נקבע תור חדש ב-REVIRA
 שם: ${clientName}
@@ -69,6 +93,18 @@ export const createAppointment = async (req, res) => {
       whatsappUrl
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    if (error instanceof BookingConflictError) {
+      return res.status(409).json({ message: "Slot is no longer available" });
+    }
+
+    return res.status(500).json({ message: "Failed to create appointment" });
+  } finally {
+    if (session) {
+      try {
+        await session.endSession();
+      } catch {
+        // Cleanup failure must not replace the endpoint response.
+      }
+    }
   }
 };
