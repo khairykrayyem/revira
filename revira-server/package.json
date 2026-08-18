@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed-admin": "node utils/seedAdmin.js"
+    "seed-admin": "node utils/seedAdmin.js",
+    "reset-admin-password": "node utils/resetAdminPassword.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

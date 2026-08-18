@@ -2,8 +2,8 @@ import { useState } from "react";
 import { adminLoginRequest } from "../services/adminApi";
 
 function AdminLogin({ onLogin, language }) {
-  const [username, setUsername] = useState("reviraadmin");
-  const [password, setPassword] = useState("12345678");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
