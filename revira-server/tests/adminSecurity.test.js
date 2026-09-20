@@ -107,6 +107,28 @@ test("unknown-admin login still performs the fixed dummy bcrypt path and stays n
   assert.deepEqual(unknown.body, { message: "Invalid credentials" });
 });
 
+test("new admin JWT uses HS256 and an approximately 12-hour lifetime", async () => {
+  process.env.JWT_SECRET = SECRET;
+  await AdminUser.deleteMany({});
+  await AdminUser.create({
+    username: "lifetime-admin",
+    passwordHash: await bcrypt.hash("isolated-password", 4)
+  });
+  const app = express();
+  app.use(express.json());
+  app.use("/api/admin", adminRoutes);
+
+  const response = await request(app)
+    .post("/api/admin/login")
+    .send({ username: "lifetime-admin", password: "isolated-password" });
+  assert.equal(response.status, 200);
+
+  const decoded = jwt.decode(response.body.token, { complete: true });
+  assert.equal(decoded.header.alg, "HS256");
+  const lifetimeSeconds = decoded.payload.exp - decoded.payload.iat;
+  assert.ok(lifetimeSeconds >= 43_190 && lifetimeSeconds <= 43_210);
+});
+
 test("seed and reset configuration deny ambiguous environments before database work", () => {
   const base = { MONGO_URI: "mongodb://isolated", ADMIN_USERNAME: "audit-admin", ADMIN_PASSWORD: "a".repeat(12) };
   assert.throws(() => validateSeedConfig(base), /NODE_ENV=development/);

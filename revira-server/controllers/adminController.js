@@ -62,7 +62,7 @@ export const adminLogin = async (req, res) => {
         username: admin.username
       },
       process.env.JWT_SECRET,
-      { algorithm: "HS256", expiresIn: "7d" }
+      { algorithm: "HS256", expiresIn: "12h" }
     );
 
     return res.json({ token });

@@ -1,6 +1,38 @@
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+export const ADMIN_TOKEN_STORAGE_KEY = "revira_admin_token";
+export const ADMIN_SESSION_INVALIDATED_EVENT = "revira:admin-session-invalidated";
+
+const invalidateAdminSession = (token) => {
+  if (localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) !== token) return;
+
+  localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(ADMIN_SESSION_INVALIDATED_EVENT));
+};
+
+const authenticatedAdminRequest = async (path, token, options = {}, fallbackMessage) => {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  const data = await response.json();
+
+  if (response.status === 401) {
+    invalidateAdminSession(token);
+  }
+
+  if (!response.ok) {
+    throw new Error(data.message || fallbackMessage);
+  }
+
+  return data;
+};
+
 export const adminLoginRequest = async (username, password) => {
   const response = await fetch(`${API_BASE_URL}/admin/login`, {
     method: "POST",
@@ -20,125 +52,68 @@ export const adminLoginRequest = async (username, password) => {
 };
 
 export const openRangeSlotsRequest = async (token, payload) => {
-  const response = await fetch(`${API_BASE_URL}/admin/slots/open-range`, {
+  return authenticatedAdminRequest("/admin/slots/open-range", token, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to open slots");
-  }
-
-  return data;
+  }, "Failed to open slots");
 };
 
 export const updateDaySlotsRequest = async (token, date, action) => {
-  const response = await fetch(`${API_BASE_URL}/admin/slots/day/${date}`, {
+  return authenticatedAdminRequest(`/admin/slots/day/${date}`, token, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ action }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to update day slots");
-  }
-
-  return data;
+  }, "Failed to update day slots");
 };
 
 export const getMonthOverviewRequest = async (token, month) => {
-  const response = await fetch(`${API_BASE_URL}/admin/month?month=${month}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch month overview");
-  }
-
-  return data;
+  return authenticatedAdminRequest(
+    `/admin/month?month=${month}`,
+    token,
+    {},
+    "Failed to fetch month overview"
+  );
 };
 
 export const getDaySlotsRequest = async (token, date) => {
-  const response = await fetch(`${API_BASE_URL}/admin/slots?date=${date}`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch day slots");
-  }
-
-  return data;
+  return authenticatedAdminRequest(
+    `/admin/slots?date=${date}`,
+    token,
+    {},
+    "Failed to fetch day slots"
+  );
 };
 
 export const updateSlotRequest = async (token, slotId, payload) => {
-  const response = await fetch(`${API_BASE_URL}/admin/slots/${slotId}`, {
+  return authenticatedAdminRequest(`/admin/slots/${slotId}`, token, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to update slot");
-  }
-
-  return data;
+  }, "Failed to update slot");
 };
 
 export const getAppointmentsRequest = async (token) => {
-  const response = await fetch(`${API_BASE_URL}/admin/appointments`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch appointments");
-  }
-
-  return data;
+  return authenticatedAdminRequest(
+    "/admin/appointments",
+    token,
+    {},
+    "Failed to fetch appointments"
+  );
 };
 
 export const updateAppointmentRequest = async (token, appointmentId, status) => {
-  const response = await fetch(`${API_BASE_URL}/admin/appointments/${appointmentId}`, {
+  return authenticatedAdminRequest(`/admin/appointments/${appointmentId}`, token, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({ status }),
-  });
-
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to update appointment");
-  }
-
-  return data;
+  }, "Failed to update appointment");
 };

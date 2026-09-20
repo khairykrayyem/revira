@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { adminLoginRequest } from "../services/adminApi";
+import { ADMIN_TOKEN_STORAGE_KEY, adminLoginRequest } from "../services/adminApi";
 
-function AdminLogin({ onLogin, language }) {
+function AdminLogin({ onLogin, language, sessionExpired }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -16,6 +16,7 @@ function AdminLogin({ onLogin, language }) {
           password: "סיסמה",
           button: "התחבר",
           loading: "מתחבר...",
+          sessionExpired: "פג תוקף ההתחברות. יש להתחבר מחדש.",
         }
       : {
           title: "دخول الأدمن",
@@ -24,6 +25,7 @@ function AdminLogin({ onLogin, language }) {
           password: "كلمة المرور",
           button: "تسجيل الدخول",
           loading: "جارٍ تسجيل الدخول...",
+          sessionExpired: "انتهت صلاحية الجلسة. يرجى تسجيل الدخول مجددًا.",
         };
 
   const handleSubmit = async (e) => {
@@ -33,7 +35,7 @@ function AdminLogin({ onLogin, language }) {
     try {
       setLoading(true);
       const result = await adminLoginRequest(username, password);
-      localStorage.setItem("revira_admin_token", result.token);
+      localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, result.token);
       onLogin(result.token);
     } catch (err) {
       setError(err.message);
@@ -48,6 +50,10 @@ function AdminLogin({ onLogin, language }) {
         <div className="card admin-login-card">
           <h2 className="section-title">{labels.title}</h2>
           <p className="section-subtitle">{labels.subtitle}</p>
+
+          {sessionExpired && (
+            <div className="booking-message error-message">{labels.sessionExpired}</div>
+          )}
 
           <form className="admin-login-form" onSubmit={handleSubmit}>
             <div className="form-group">

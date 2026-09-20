@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AppointmentsTable from "./AppointmentsTable";
 import MonthCalendar from "./MonthCalendar";
 import DaySlotsManager from "./DaySlotsManager";
@@ -56,7 +56,7 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
     return `${year}-${monthValue}-${day}`;
   };
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
@@ -73,9 +73,9 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
     } finally {
       setLoading(false);
     }
-  };
+  }, [month, token]);
 
-  const loadSelectedDaySlots = async (date) => {
+  const loadSelectedDaySlots = useCallback(async (date) => {
     if (!date) {
       setDaySlots([]);
       return;
@@ -87,15 +87,15 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
     } catch (err) {
       setError(err.message);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     loadData();
-  }, [month]);
+  }, [loadData]);
 
   useEffect(() => {
     loadSelectedDaySlots(selectedDate);
-  }, [selectedDate]);
+  }, [loadSelectedDaySlots, selectedDate]);
 
   useEffect(() => {
   const interval = setInterval(() => {
@@ -106,7 +106,7 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
   }, 15000);
 
   return () => clearInterval(interval);
-}, [selectedDate, month]);
+}, [loadData, loadSelectedDaySlots, selectedDate]);
 
   const handleOpenRange = async (daysToAdd) => {
     try {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "./components/Header";
 import HeroSection from "./components/HeroSection";
 import AboutSection from "./components/AboutSection";
@@ -8,13 +8,42 @@ import BookingCalendar from "./components/BookingCalendar";
 import ContactSection from "./components/ContactSection";
 import AdminLogin from "./admin/AdminLogin";
 import AdminDashboard from "./admin/AdminDashboard";
+import {
+  ADMIN_SESSION_INVALIDATED_EVENT,
+  ADMIN_TOKEN_STORAGE_KEY,
+} from "./services/adminApi";
 
 function App() {
   const [language, setLanguage] = useState("he");
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminToken, setAdminToken] = useState(
-    localStorage.getItem("revira_admin_token") || ""
+    localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || ""
   );
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  useEffect(() => {
+    const handleSessionInvalidated = () => {
+      setAdminToken("");
+      setSessionExpired(true);
+      setShowAdmin(true);
+    };
+
+    const handleStorage = (event) => {
+      if (event.key !== ADMIN_TOKEN_STORAGE_KEY) return;
+
+      setAdminToken(event.newValue || "");
+      setSessionExpired(false);
+      if (!event.newValue) setShowAdmin(true);
+    };
+
+    window.addEventListener(ADMIN_SESSION_INVALIDATED_EVENT, handleSessionInvalidated);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(ADMIN_SESSION_INVALIDATED_EVENT, handleSessionInvalidated);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   const content = {
     he: {
@@ -196,9 +225,15 @@ function App() {
   const t = content[language];
 
   const handleLogout = () => {
-    localStorage.removeItem("revira_admin_token");
+    localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
     setAdminToken("");
+    setSessionExpired(false);
     setShowAdmin(false);
+  };
+
+  const handleLogin = (token) => {
+    setAdminToken(token);
+    setSessionExpired(false);
   };
 
   if (showAdmin) {
@@ -224,8 +259,9 @@ function App() {
           />
         ) : (
           <AdminLogin
-            onLogin={setAdminToken}
+            onLogin={handleLogin}
             language={language}
+            sessionExpired={sessionExpired}
           />
         )}
       </div>
