@@ -19,8 +19,8 @@ export const getOpenSlots = async (req, res) => {
 
     const slots = await Slot.find(filter).sort({ date: 1, startTime: 1 });
     return res.json(slots);
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to fetch slots" });
   }
 };
 

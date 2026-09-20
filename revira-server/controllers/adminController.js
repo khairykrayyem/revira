@@ -23,15 +23,21 @@ const formatDate = (dateObj) => {
 
 const getDatesInRange = (startDate, endDate) => {
   const dates = [];
-  const current = new Date(startDate);
-  const end = new Date(endDate);
+  const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+  const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+  const current = new Date(0);
+  const end = new Date(0);
+  current.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(0, 0, 0, 0);
+  current.setUTCFullYear(startYear, startMonth - 1, startDay);
+  end.setUTCFullYear(endYear, endMonth - 1, endDay);
 
   while (current <= end) {
-    const day = current.getDay(); // 0 Sunday, 6 Saturday
+    const day = current.getUTCDay(); // 0 Sunday, 6 Saturday
     if (day >= 0 && day <= 5) {
-      dates.push(formatDate(current));
+      dates.push(current.toISOString().slice(0, 10));
     }
-    current.setDate(current.getDate() + 1);
+    current.setUTCDate(current.getUTCDate() + 1);
   }
 
   return dates;
@@ -61,8 +67,8 @@ export const adminLogin = async (req, res) => {
     );
 
     return res.json({ token });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to authenticate" });
   }
 };
 
@@ -170,8 +176,8 @@ export const updateDaySlots = async (req, res) => {
       message: `Day slots ${action}ed successfully`,
       slots: updatedSlots
     });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to update day slots" });
   }
 };
 
@@ -210,8 +216,8 @@ export const getMonthOverview = async (req, res) => {
     });
 
     return res.json(Object.values(summary));
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to fetch month overview" });
   }
 };
 
@@ -225,8 +231,8 @@ export const getDaySlots = async (req, res) => {
 
     const slots = await Slot.find({ date }).sort({ startTime: 1 });
     return res.json(slots);
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to fetch day slots" });
   }
 };
 
@@ -269,8 +275,8 @@ export const updateSlot = async (req, res) => {
       message: "Slot updated successfully",
       slot
     });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to update slot" });
   }
 };
 
@@ -281,8 +287,8 @@ export const getAppointments = async (_req, res) => {
       .sort({ createdAt: -1 });
 
     return res.json(appointments);
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to fetch appointments" });
   }
 };
 
@@ -368,7 +374,7 @@ export const updateAppointment = async (req, res) => {
       message: "Appointment updated successfully",
       appointment
     });
-  } catch (error) {
+  } catch {
     return res.status(500).json({ message: "Failed to update appointment" });
   } finally {
     if (session) {
