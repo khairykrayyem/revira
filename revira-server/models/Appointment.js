@@ -41,4 +41,14 @@ const appointmentSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+appointmentSchema.index(
+  { slotId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      status: { $in: ["pending", "confirmed"] }
+    }
+  }
+);
+
 export default mongoose.model("Appointment", appointmentSchema);

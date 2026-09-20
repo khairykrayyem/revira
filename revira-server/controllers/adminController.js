@@ -91,7 +91,9 @@ export const openRangeSlots = async (req, res) => {
           });
           createdCount += 1;
         } catch (error) {
-          // duplicate slot -> skip
+          if (error?.code !== 11000) {
+            throw error;
+          }
         }
       }
     }
@@ -100,8 +102,8 @@ export const openRangeSlots = async (req, res) => {
       message: "Slots opened successfully",
       createdCount
     });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
+  } catch {
+    return res.status(500).json({ message: "Failed to open slots" });
   }
 };
 
@@ -138,7 +140,7 @@ export const updateDaySlots = async (req, res) => {
           continue;
         }
 
-        if (existingSlot.status !== "booked") {
+        if (existingSlot.status !== "booked" && !existingSlot.appointmentId) {
           existingSlot.isOpen = true;
           existingSlot.status = "available";
           await existingSlot.save();
@@ -150,7 +152,8 @@ export const updateDaySlots = async (req, res) => {
       await Slot.updateMany(
         {
           date,
-          status: { $ne: "booked" }
+          status: { $ne: "booked" },
+          appointmentId: null
         },
         {
           $set: {
@@ -306,6 +309,22 @@ export const updateAppointment = async (req, res) => {
       if (!appointment) {
         resultStatus = 404;
         resultMessage = "Appointment not found";
+        return;
+      }
+
+      if (status === appointment.status) {
+        return;
+      }
+
+      const allowedTransitions = {
+        pending: ["confirmed", "cancelled"],
+        confirmed: ["cancelled"],
+        cancelled: []
+      };
+
+      if (status && !allowedTransitions[appointment.status].includes(status)) {
+        resultStatus = 409;
+        resultMessage = "Appointment status transition is not allowed";
         return;
       }
 
