@@ -4,12 +4,18 @@ export const authMiddleware = (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (typeof authHeader !== "string") {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const token = authHeader.split(" ")[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const match = /^Bearer ([^\s]+)$/.exec(authHeader);
+    if (!match) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const decoded = jwt.verify(match[1], process.env.JWT_SECRET, {
+      algorithms: ["HS256"]
+    });
 
     req.admin = decoded;
     next();

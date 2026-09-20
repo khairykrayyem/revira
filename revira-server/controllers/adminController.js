@@ -14,6 +14,9 @@ const DEFAULT_TIMES = [
   { startTime: "15:30", endTime: "17:00" }
 ];
 
+// Fixed non-credential hash used to keep unknown-user and wrong-password work comparable.
+const DUMMY_PASSWORD_HASH = "$2a$12$4Cw/XZJb4lM8Wj4E5Hsx.e8QkpI3RnN7MFRPWu7aPXgHk6wzE2E3q";
+
 const formatDate = (dateObj) => {
   const year = dateObj.getFullYear();
   const month = String(dateObj.getMonth() + 1).padStart(2, "0");
@@ -47,13 +50,9 @@ export const adminLogin = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    const admin = await AdminUser.findOne({ username });
-    if (!admin) {
-      return res.status(401).json({ message: "Invalid credentials" });
-    }
-
-    const isMatch = await bcrypt.compare(password, admin.passwordHash);
-    if (!isMatch) {
+    const admin = await AdminUser.findOne({ username }).select("+passwordHash");
+    const isMatch = await bcrypt.compare(password, admin?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!admin || !isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
 
@@ -63,7 +62,7 @@ export const adminLogin = async (req, res) => {
         username: admin.username
       },
       process.env.JWT_SECRET,
-      { expiresIn: "7d" }
+      { algorithm: "HS256", expiresIn: "7d" }
     );
 
     return res.json({ token });

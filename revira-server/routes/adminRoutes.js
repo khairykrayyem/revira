@@ -10,6 +10,10 @@ import {
   updateSlot
 } from "../controllers/adminController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
+import {
+  adminLoginRateLimiter,
+  adminLoginUsernameRateLimiter
+} from "../middleware/adminLoginRateLimiter.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import {
   dayParamsSchema,
@@ -25,7 +29,13 @@ import {
 
 const router = express.Router();
 
-router.post("/login", validateRequest({ body: loginBodySchema }), adminLogin);
+router.post(
+  "/login",
+  validateRequest({ body: loginBodySchema }),
+  adminLoginRateLimiter,
+  adminLoginUsernameRateLimiter,
+  adminLogin
+);
 
 router.post(
   "/slots/open-range",
