@@ -81,6 +81,17 @@
   color: rgba(255,255,255,0.45);
 }
 
+.booking-treatment-select {
+  color-scheme: dark;
+  background: #1b1b1b;
+  color: #ffffff;
+}
+
+.booking-treatment-select option {
+  background: #1b1b1b;
+  color: #ffffff;
+}
+
 .booking-submit-btn {
   margin-top: 6px;
   width: 100%;

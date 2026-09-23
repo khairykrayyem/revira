@@ -98,6 +98,12 @@ a {
   transform: translateY(-2px);
 }
 
+.admin-page .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);

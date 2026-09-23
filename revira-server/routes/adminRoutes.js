@@ -1,6 +1,7 @@
 import express from "express";
 import {
   adminLogin,
+  closeRangeSlots,
   getAppointments,
   getDaySlots,
   getMonthOverview,
@@ -16,6 +17,7 @@ import {
 } from "../middleware/adminLoginRateLimiter.js";
 import { validateRequest } from "../middleware/validateRequest.js";
 import {
+  closeRangeBodySchema,
   dayParamsSchema,
   dayQuerySchema,
   idParamsSchema,
@@ -42,6 +44,12 @@ router.post(
   authMiddleware,
   validateRequest({ body: openRangeBodySchema }),
   openRangeSlots
+);
+router.patch(
+  "/slots/close-range",
+  authMiddleware,
+  validateRequest({ body: closeRangeBodySchema }),
+  closeRangeSlots
 );
 router.patch(
   "/slots/day/:date",

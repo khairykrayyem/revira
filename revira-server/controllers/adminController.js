@@ -46,6 +46,25 @@ const getDatesInRange = (startDate, endDate) => {
   return dates;
 };
 
+const isCanonicalSlotIdentityDuplicate = (error, { date, startTime }) => {
+  if (error?.code !== 11000) return false;
+
+  const keyPattern = error.keyPattern;
+  if (
+    !keyPattern ||
+    Object.keys(keyPattern).length !== 2 ||
+    keyPattern.date !== 1 ||
+    keyPattern.startTime !== 1
+  ) {
+    return false;
+  }
+
+  const keyValue = error.keyValue;
+  if (!keyValue || Object.keys(keyValue).length !== 2) return false;
+
+  return keyValue.date === date && keyValue.startTime === startTime;
+};
+
 export const adminLogin = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -82,21 +101,39 @@ export const openRangeSlots = async (req, res) => {
     const selectedTimes = Array.isArray(times) && times.length ? times : DEFAULT_TIMES;
     const dates = getDatesInRange(startDate, endDate);
 
-    let createdCount = 0;
+    let matchedCount = 0;
+    let modifiedCount = 0;
+    let upsertedCount = 0;
 
     for (const date of dates) {
       for (const time of selectedTimes) {
         try {
-          await Slot.create({
-            date,
-            startTime: time.startTime,
-            endTime: time.endTime,
-            isOpen: true,
-            status: "available"
-          });
-          createdCount += 1;
+          const result = await Slot.updateOne(
+            {
+              date,
+              startTime: time.startTime,
+              appointmentId: null,
+              status: { $ne: "booked" }
+            },
+            {
+              $set: {
+                endTime: time.endTime,
+                isOpen: true,
+                status: "available"
+              },
+              $setOnInsert: {
+                date,
+                startTime: time.startTime,
+                appointmentId: null
+              }
+            },
+            { upsert: true }
+          );
+          matchedCount += result.matchedCount;
+          modifiedCount += result.modifiedCount;
+          upsertedCount += result.upsertedCount;
         } catch (error) {
-          if (error?.code !== 11000) {
+          if (!isCanonicalSlotIdentityDuplicate(error, { date, startTime: time.startTime })) {
             throw error;
           }
         }
@@ -105,10 +142,45 @@ export const openRangeSlots = async (req, res) => {
 
     return res.json({
       message: "Slots opened successfully",
-      createdCount
+      createdCount: upsertedCount,
+      matchedCount,
+      modifiedCount,
+      upsertedCount
     });
   } catch {
     return res.status(500).json({ message: "Failed to open slots" });
+  }
+};
+
+export const closeRangeSlots = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.body;
+
+    const result = await Slot.updateMany(
+      {
+        date: { $gte: startDate, $lte: endDate },
+        appointmentId: null,
+        status: { $ne: "booked" },
+        $or: [
+          { isOpen: { $ne: false } },
+          { status: { $ne: "closed" } }
+        ]
+      },
+      {
+        $set: {
+          isOpen: false,
+          status: "closed"
+        }
+      }
+    );
+
+    return res.json({
+      message: "Range slots closed successfully",
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch {
+    return res.status(500).json({ message: "Failed to close range slots" });
   }
 };
 
@@ -129,26 +201,32 @@ export const updateDaySlots = async (req, res) => {
 
     if (action === "open") {
       for (const time of selectedTimes) {
-        const existingSlot = await Slot.findOne({
-          date,
-          startTime: time.startTime
-        });
-
-        if (!existingSlot) {
-          await Slot.create({
-            date,
-            startTime: time.startTime,
-            endTime: time.endTime,
-            isOpen: true,
-            status: "available"
-          });
-          continue;
-        }
-
-        if (existingSlot.status !== "booked" && !existingSlot.appointmentId) {
-          existingSlot.isOpen = true;
-          existingSlot.status = "available";
-          await existingSlot.save();
+        try {
+          await Slot.updateOne(
+            {
+              date,
+              startTime: time.startTime,
+              appointmentId: null,
+              status: { $ne: "booked" }
+            },
+            {
+              $set: {
+                endTime: time.endTime,
+                isOpen: true,
+                status: "available"
+              },
+              $setOnInsert: {
+                date,
+                startTime: time.startTime,
+                appointmentId: null
+              }
+            },
+            { upsert: true }
+          );
+        } catch (error) {
+          if (!isCanonicalSlotIdentityDuplicate(error, { date, startTime: time.startTime })) {
+            throw error;
+          }
         }
       }
     }
@@ -265,14 +343,28 @@ export const updateSlot = async (req, res) => {
       return res.status(400).json({ message: "Slot availability and status are inconsistent" });
     }
 
-    slot.isOpen = nextIsOpen;
-    slot.status = nextStatus;
+    const updatedSlot = await Slot.findOneAndUpdate(
+      {
+        _id: id,
+        appointmentId: null,
+        status: { $ne: "booked" }
+      },
+      {
+        $set: {
+          isOpen: nextIsOpen,
+          status: nextStatus
+        }
+      },
+      { new: true, runValidators: true }
+    );
 
-    await slot.save();
+    if (!updatedSlot) {
+      return res.status(409).json({ message: "Slot ownership changed; refresh and try again" });
+    }
 
     return res.json({
       message: "Slot updated successfully",
-      slot
+      slot: updatedSlot
     });
   } catch {
     return res.status(500).json({ message: "Failed to update slot" });

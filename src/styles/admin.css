@@ -200,6 +200,11 @@
   font-size: 0.88rem;
 }
 
+.mini-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .mini-btn-confirm {
   background: rgba(80, 200, 120, 0.16);
   color: #d8ffe4;

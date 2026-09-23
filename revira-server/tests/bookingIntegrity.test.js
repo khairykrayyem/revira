@@ -12,10 +12,15 @@ import Slot from "../models/Slot.js";
 import { jsonErrorHandler } from "../middleware/jsonErrorHandler.js";
 import adminRoutes from "../routes/adminRoutes.js";
 import publicRoutes from "../routes/publicRoutes.js";
+import { createAppointmentAt, getOpenSlotsAt } from "../controllers/publicController.js";
 import { LIMITS, MAX_RANGE_DAYS, MAX_TIMES_PER_DAY } from "../validation/schemas.js";
+import { buildFutureSlotFilter, getClinicDateTime } from "../utils/clinicTime.js";
+import { getAdminRangeBounds } from "../../src/utils/adminRange.js";
+import { isSlotStartInFuture } from "../../src/utils/clinicTime.js";
 
 const TEST_DATABASE_NAME = "revira_booking_integrity_test";
 const CONCURRENT_REQUEST_COUNT = 8;
+const CANONICAL_TIMES = ["08:00", "09:30", "11:00", "12:30", "14:00", "15:30"];
 
 const app = express();
 app.use(express.json({ limit: "32kb" }));
@@ -47,6 +52,103 @@ const bookingPayload = (slotId, overrides = {}) => ({
 
 const bookSlot = (slotId, overrides) =>
   request(app).post("/api/appointments").send(bookingPayload(slotId, overrides));
+
+const addCalendarDays = (dateString, days) => {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+};
+
+const getOperatingDates = (startDate, endDate) => {
+  const dates = [];
+  for (let date = startDate; date <= endDate; date = addCalendarDays(date, 1)) {
+    const [year, month, day] = date.split("-").map(Number);
+    if (new Date(Date.UTC(year, month - 1, day)).getUTCDay() !== 6) dates.push(date);
+  }
+  return dates;
+};
+
+const verifyCloseRange = async ({ mode, expectedBounds, fixedNow }) => {
+  const bounds = getAdminRangeBounds({
+    month: expectedBounds.startDate.slice(0, 7),
+    selectedDate: expectedBounds.startDate,
+    mode,
+    now: fixedNow
+  });
+  assert.deepEqual(bounds, expectedBounds);
+
+  const before = await Slot.create({
+    ...availableSlot(),
+    date: addCalendarDays(bounds.startDate, -1),
+    startTime: "08:00"
+  });
+  const firstInside = await Slot.create({
+    ...availableSlot(),
+    date: bounds.startDate,
+    startTime: "09:00",
+    endTime: "10:00"
+  });
+  const lastInside = await Slot.create({
+    ...availableSlot(),
+    date: bounds.endDate,
+    startTime: "10:00",
+    endTime: "11:00"
+  });
+  const bookedInside = await Slot.create({
+    ...availableSlot(),
+    date: bounds.startDate,
+    startTime: "11:00",
+    endTime: "12:00"
+  });
+  const appointment = await Appointment.create(bookingPayload(bookedInside._id));
+  await Slot.updateOne(
+    { _id: bookedInside._id },
+    { $set: { isOpen: false, status: "booked", appointmentId: appointment._id } }
+  );
+  const after = await Slot.create({
+    ...availableSlot(),
+    date: addCalendarDays(bounds.endDate, 1),
+    startTime: "12:00",
+    endTime: "13:00"
+  });
+
+  const authorization = { Authorization: `Bearer ${adminToken}` };
+  const firstResponse = await request(app)
+    .patch("/api/admin/slots/close-range")
+    .set(authorization)
+    .send(bounds);
+  assert.equal(firstResponse.status, 200);
+  assert.equal(firstResponse.body.matchedCount, 2);
+  assert.equal(firstResponse.body.modifiedCount, 2);
+
+  const retryResponse = await request(app)
+    .patch("/api/admin/slots/close-range")
+    .set(authorization)
+    .send(bounds);
+  assert.equal(retryResponse.status, 200);
+  assert.equal(retryResponse.body.matchedCount, 0);
+  assert.equal(retryResponse.body.modifiedCount, 0);
+
+  for (const slotId of [firstInside._id, lastInside._id]) {
+    const slot = await Slot.findById(slotId);
+    assert.equal(slot.isOpen, false);
+    assert.equal(slot.status, "closed");
+    assert.equal(slot.appointmentId, null);
+  }
+
+  for (const slotId of [before._id, after._id]) {
+    const slot = await Slot.findById(slotId);
+    assert.equal(slot.isOpen, true);
+    assert.equal(slot.status, "available");
+    assert.equal(slot.appointmentId, null);
+  }
+
+  const preservedBookedSlot = await Slot.findById(bookedInside._id);
+  assert.equal(preservedBookedSlot.isOpen, false);
+  assert.equal(preservedBookedSlot.status, "booked");
+  assert.equal(preservedBookedSlot.appointmentId.toString(), appointment._id.toString());
+  assert.equal(await Appointment.countDocuments({}), 1);
+  assert.equal((await Appointment.findById(appointment._id)).status, "pending");
+};
 
 before(async () => {
   replicaSet = await MongoMemoryReplSet.create({ replSet: { count: 1 } });
@@ -117,6 +219,332 @@ test("already booked Slot returns 409 without another Appointment", async () => 
   assert.equal((await bookSlot(slot._id)).status, 201);
   assert.equal((await bookSlot(slot._id)).status, 409);
   assert.equal(await Appointment.countDocuments({ slotId: slot._id }), 1);
+});
+
+test("clinic-time filter excludes past and boundary slots while preserving future slots", async () => {
+  const fixedNow = new Date("2026-09-22T19:38:00.000Z");
+  assert.deepEqual(getClinicDateTime(fixedNow), { date: "2026-09-22", time: "22:38" });
+
+  const slots = await Slot.create([
+    { ...availableSlot(), date: "2026-09-21", startTime: "23:00", endTime: "23:30" },
+    { ...availableSlot(), date: "2026-09-22", startTime: "08:00", endTime: "09:00" },
+    { ...availableSlot(), date: "2026-09-22", startTime: "16:00", endTime: "17:00" },
+    { ...availableSlot(), date: "2026-09-22", startTime: "22:38", endTime: "23:00" },
+    { ...availableSlot(), date: "2026-09-22", startTime: "22:39", endTime: "23:00" },
+    { ...availableSlot(), date: "2026-09-23", startTime: "00:00", endTime: "00:01" }
+  ]);
+
+  const bookable = await Slot.find(buildFutureSlotFilter(fixedNow)).sort({ date: 1, startTime: 1 });
+  assert.deepEqual(
+    bookable.map((slot) => slot._id.toString()),
+    [slots[4]._id.toString(), slots[5]._id.toString()]
+  );
+  assert.equal(isSlotStartInFuture(slots[0], fixedNow), false);
+  assert.equal(isSlotStartInFuture(slots[1], fixedNow), false);
+  assert.equal(isSlotStartInFuture(slots[2], fixedNow), false);
+  assert.equal(isSlotStartInFuture(slots[3], fixedNow), false);
+  assert.equal(isSlotStartInFuture(slots[4], fixedNow), true);
+  assert.equal(isSlotStartInFuture(slots[5], fixedNow), true);
+
+  const inconsistentOwnedSlot = await Slot.create({
+    ...availableSlot(),
+    date: "2026-09-23",
+    startTime: "01:00",
+    endTime: "01:30"
+  });
+  const historicalOwner = await Appointment.create({
+    ...bookingPayload(inconsistentOwnedSlot._id),
+    status: "cancelled"
+  });
+  await Slot.updateOne(
+    { _id: inconsistentOwnedSlot._id },
+    { $set: { appointmentId: historicalOwner._id } }
+  );
+
+  const fixedTimeApp = express();
+  fixedTimeApp.use(express.json());
+  fixedTimeApp.get("/slots", (req, res) => getOpenSlotsAt(req, res, fixedNow));
+  fixedTimeApp.post("/appointments", (req, res) => createAppointmentAt(req, res, fixedNow));
+
+  const visibleResponse = await request(fixedTimeApp).get(
+    "/slots?from=2026-09-22&to=2026-09-23"
+  );
+  assert.equal(visibleResponse.status, 200);
+  assert.deepEqual(
+    visibleResponse.body.map((slot) => slot._id),
+    [slots[4]._id.toString(), slots[5]._id.toString()]
+  );
+
+  const bypassedPastBooking = await request(fixedTimeApp)
+    .post("/appointments")
+    .send(bookingPayload(slots[2]._id));
+  assert.equal(bypassedPastBooking.status, 409);
+  assert.equal(await Appointment.countDocuments({ slotId: slots[2]._id }), 0);
+
+  const futureBooking = await request(fixedTimeApp)
+    .post("/appointments")
+    .send(bookingPayload(slots[4]._id));
+  assert.equal(futureBooking.status, 201);
+  assert.equal(await Appointment.countDocuments({ slotId: slots[4]._id }), 1);
+});
+
+test("booking endpoint atomically rejects an unquestionably past Slot", async () => {
+  const slot = await Slot.create({ ...availableSlot(), date: "2000-01-01" });
+  const response = await bookSlot(slot._id);
+
+  assert.equal(response.status, 409);
+  assert.equal(await Appointment.countDocuments({ slotId: slot._id }), 0);
+  const unchangedSlot = await Slot.findById(slot._id);
+  assert.equal(unchangedSlot.isOpen, true);
+  assert.equal(unchangedSlot.status, "available");
+  assert.equal(unchangedSlot.appointmentId, null);
+});
+
+test("admin range bounds are inclusive, selected-date aware, and timezone safe", () => {
+  const fixedNow = new Date("2026-09-22T19:41:00.000Z");
+
+  assert.deepEqual(
+    getAdminRangeBounds({ month: "2026-10", selectedDate: "", mode: "7", now: fixedNow }),
+    { startDate: "2026-10-01", endDate: "2026-10-07" }
+  );
+  assert.deepEqual(
+    getAdminRangeBounds({ month: "2026-10", selectedDate: "", mode: "14", now: fixedNow }),
+    { startDate: "2026-10-01", endDate: "2026-10-14" }
+  );
+  assert.deepEqual(
+    getAdminRangeBounds({ month: "2026-10", selectedDate: "", mode: "month", now: fixedNow }),
+    { startDate: "2026-10-01", endDate: "2026-10-31" }
+  );
+  assert.deepEqual(
+    getAdminRangeBounds({ month: "2026-10", selectedDate: "2026-10-10", mode: "7", now: fixedNow }),
+    { startDate: "2026-10-10", endDate: "2026-10-16" }
+  );
+  assert.deepEqual(
+    getAdminRangeBounds({ month: "2026-09", selectedDate: "", mode: "7", now: fixedNow }),
+    { startDate: "2026-09-22", endDate: "2026-09-28" }
+  );
+});
+
+test("close 7 days uses the frontend bounds and preserves range boundaries and ownership", async () => {
+  await verifyCloseRange({
+    mode: "7",
+    expectedBounds: { startDate: "2099-10-05", endDate: "2099-10-11" },
+    fixedNow: new Date("2099-09-01T12:00:00.000Z")
+  });
+});
+
+test("close 14 days uses the frontend bounds and preserves range boundaries and ownership", async () => {
+  await verifyCloseRange({
+    mode: "14",
+    expectedBounds: { startDate: "2099-10-05", endDate: "2099-10-18" },
+    fixedNow: new Date("2099-09-01T12:00:00.000Z")
+  });
+});
+
+test("close month uses the frontend bounds and preserves range boundaries and ownership", async () => {
+  await verifyCloseRange({
+    mode: "month",
+    expectedBounds: { startDate: "2099-10-01", endDate: "2099-10-31" },
+    fixedNow: new Date("2099-09-01T12:00:00.000Z")
+  });
+});
+
+test("close month then open 7, 14, or month reopens existing canonical documents publicly", async () => {
+  const authorization = { Authorization: `Bearer ${adminToken}` };
+  const cases = [
+    { mode: "7", bounds: { startDate: "2098-03-02", endDate: "2098-03-08" } },
+    { mode: "14", bounds: { startDate: "2098-04-01", endDate: "2098-04-14" } },
+    { mode: "month", bounds: { startDate: "2098-05-01", endDate: "2098-05-31" } }
+  ];
+
+  for (const { bounds } of cases) {
+    await Promise.all([Appointment.deleteMany({}), Slot.deleteMany({})]);
+    const monthEnd = `${bounds.startDate.slice(0, 7)}-${new Date(
+      Date.UTC(Number(bounds.startDate.slice(0, 4)), Number(bounds.startDate.slice(5, 7)), 0)
+    ).getUTCDate()}`;
+    const monthBounds = { startDate: `${bounds.startDate.slice(0, 7)}-01`, endDate: monthEnd };
+
+    const initialOpen = await request(app)
+      .post("/api/admin/slots/open-range")
+      .set(authorization)
+      .send(monthBounds);
+    assert.equal(initialOpen.status, 200);
+
+    const identitySlot = await Slot.findOne({ date: bounds.startDate, startTime: CANONICAL_TIMES[0] });
+    assert.ok(identitySlot);
+    const bookedSlot = await Slot.findOne({ date: bounds.startDate, startTime: CANONICAL_TIMES[1] });
+    const appointment = await Appointment.create(bookingPayload(bookedSlot._id));
+    await Slot.updateOne(
+      { _id: bookedSlot._id },
+      { $set: { isOpen: false, status: "booked", appointmentId: appointment._id } }
+    );
+
+    const close = await request(app)
+      .patch("/api/admin/slots/close-range")
+      .set(authorization)
+      .send(monthBounds);
+    assert.equal(close.status, 200);
+    assert.equal((await request(app).get(`/api/slots?from=${monthBounds.startDate}&to=${monthBounds.endDate}`)).body.length, 0);
+
+    const reopen = await request(app)
+      .post("/api/admin/slots/open-range")
+      .set(authorization)
+      .send(bounds);
+    assert.equal(reopen.status, 200);
+    assert.equal(reopen.body.upsertedCount, 0);
+
+    const expectedOperatingDates = getOperatingDates(bounds.startDate, bounds.endDate);
+    const expectedPublicCount = expectedOperatingDates.length * CANONICAL_TIMES.length - 1;
+    const publicResponse = await request(app).get(`/api/slots?from=${bounds.startDate}&to=${bounds.endDate}`);
+    assert.equal(publicResponse.status, 200);
+    assert.equal(publicResponse.body.length, expectedPublicCount);
+    assert.deepEqual(
+      [...new Set(publicResponse.body.map((slot) => slot.date))],
+      expectedOperatingDates
+    );
+
+    const reopenedIdentity = await Slot.findOne({ date: bounds.startDate, startTime: CANONICAL_TIMES[0] });
+    assert.equal(reopenedIdentity._id.toString(), identitySlot._id.toString());
+    assert.equal(reopenedIdentity.isOpen, true);
+    assert.equal(reopenedIdentity.status, "available");
+    assert.equal(reopenedIdentity.appointmentId, null);
+
+    const preservedBooked = await Slot.findById(bookedSlot._id);
+    assert.equal(preservedBooked.status, "booked");
+    assert.equal(preservedBooked.isOpen, false);
+    assert.equal(preservedBooked.appointmentId.toString(), appointment._id.toString());
+    assert.equal(await Appointment.countDocuments({ _id: appointment._id }), 1);
+
+    const overview = await request(app)
+      .get(`/api/admin/month?month=${bounds.startDate.slice(0, 7)}`)
+      .set(authorization);
+    assert.equal(overview.status, 200);
+    const firstDayOverview = overview.body.find(({ date }) => date === bounds.startDate);
+    assert.equal(firstDayOverview.openCount, CANONICAL_TIMES.length - 1);
+    assert.equal(firstDayOverview.bookedCount, 1);
+    assert.equal(firstDayOverview.closedCount, 0);
+
+    if (bounds.endDate < monthBounds.endDate) {
+      const outsideDate = addCalendarDays(bounds.endDate, 1);
+      assert.equal(await Slot.countDocuments({ date: outsideDate, status: "available" }), 0);
+      assert.ok(await Slot.countDocuments({ date: outsideDate, status: "closed" }));
+    }
+
+    const reclose = await request(app)
+      .patch("/api/admin/slots/close-range")
+      .set(authorization)
+      .send(bounds);
+    const secondReopen = await request(app)
+      .post("/api/admin/slots/open-range")
+      .set(authorization)
+      .send(bounds);
+    assert.equal(reclose.status, 200);
+    assert.equal(secondReopen.status, 200);
+    assert.equal(
+      (await request(app).get(`/api/slots?from=${bounds.startDate}&to=${bounds.endDate}`)).body.length,
+      expectedPublicCount
+    );
+  }
+});
+
+test("open range creates missing slots and retries without duplicate canonical identities", async () => {
+  const authorization = { Authorization: `Bearer ${adminToken}` };
+  const payload = { startDate: "2098-06-01", endDate: "2098-06-01" };
+  const first = await request(app).post("/api/admin/slots/open-range").set(authorization).send(payload);
+  const originalIds = (await Slot.find({ date: payload.startDate }).sort({ startTime: 1 })).map(({ _id }) => _id.toString());
+  const retry = await request(app).post("/api/admin/slots/open-range").set(authorization).send(payload);
+
+  assert.equal(first.status, 200);
+  assert.equal(first.body.createdCount, CANONICAL_TIMES.length);
+  assert.equal(first.body.upsertedCount, CANONICAL_TIMES.length);
+  assert.equal(retry.status, 200);
+  assert.equal(retry.body.upsertedCount, 0);
+  assert.equal(await Slot.countDocuments({ date: payload.startDate }), CANONICAL_TIMES.length);
+  assert.deepEqual(
+    (await Slot.find({ date: payload.startDate }).sort({ startTime: 1 })).map(({ _id }) => _id.toString()),
+    originalIds
+  );
+});
+
+test("public booking that wins during open range remains canonical and owned", async () => {
+  const slot = await Slot.create({ ...availableSlot(), date: "2098-07-01" });
+  const originalUpdateOne = Slot.updateOne;
+  let bookingResponse;
+  let injected = false;
+
+  Slot.updateOne = async function (filter, ...args) {
+    if (!injected && filter?.date === slot.date && filter?.startTime === slot.startTime) {
+      injected = true;
+      Slot.updateOne = originalUpdateOne;
+      bookingResponse = await bookSlot(slot._id);
+    }
+    return originalUpdateOne.call(this, filter, ...args);
+  };
+
+  try {
+    const response = await request(app)
+      .post("/api/admin/slots/open-range")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        startDate: slot.date,
+        endDate: slot.date,
+        times: [{ startTime: slot.startTime, endTime: slot.endTime }]
+      });
+    assert.equal(bookingResponse.status, 201);
+    assert.equal(response.status, 200);
+    const bookedSlot = await Slot.findById(slot._id);
+    assert.equal(bookedSlot.status, "booked");
+    assert.equal(bookedSlot.isOpen, false);
+    assert.equal(bookedSlot.appointmentId.toString(), bookingResponse.body.appointment._id);
+  } finally {
+    Slot.updateOne = originalUpdateOne;
+  }
+});
+
+test("concurrent open range requests preserve one canonical document per identity", async () => {
+  const payload = { startDate: "2098-08-01", endDate: "2098-08-01" };
+  const authorization = { Authorization: `Bearer ${adminToken}` };
+  const responses = await Promise.all([
+    request(app).post("/api/admin/slots/open-range").set(authorization).send(payload),
+    request(app).post("/api/admin/slots/open-range").set(authorization).send(payload)
+  ]);
+  assert.deepEqual(responses.map(({ status }) => status), [200, 200]);
+  assert.equal(await Slot.countDocuments({ date: payload.startDate }), CANONICAL_TIMES.length);
+  const identities = await Slot.aggregate([
+    { $match: { date: payload.startDate } },
+    { $group: { _id: { date: "$date", startTime: "$startTime" }, count: { $sum: 1 } } }
+  ]);
+  assert.ok(identities.every(({ count }) => count === 1));
+});
+
+test("range opening cannot expose or book past Jerusalem slot starts", async () => {
+  const authorization = { Authorization: `Bearer ${adminToken}` };
+  const fixedNow = new Date("2026-09-22T19:38:00.000Z");
+  const payload = {
+    startDate: "2026-09-22",
+    endDate: "2026-09-22",
+    times: [
+      { startTime: "08:00", endTime: "09:00" },
+      { startTime: "22:38", endTime: "22:39" },
+      { startTime: "22:39", endTime: "23:00" }
+    ]
+  };
+  assert.equal(
+    (await request(app).post("/api/admin/slots/open-range").set(authorization).send(payload)).status,
+    200
+  );
+
+  const fixedTimeApp = express();
+  fixedTimeApp.use(express.json());
+  fixedTimeApp.get("/slots", (req, res) => getOpenSlotsAt(req, res, fixedNow));
+  fixedTimeApp.post("/appointments", (req, res) => createAppointmentAt(req, res, fixedNow));
+  const slots = await Slot.find({ date: payload.startDate }).sort({ startTime: 1 });
+  const visible = await request(fixedTimeApp).get("/slots?from=2026-09-22&to=2026-09-22");
+  assert.deepEqual(visible.body.map(({ startTime }) => startTime), ["22:39"]);
+  assert.equal(
+    (await request(fixedTimeApp).post("/appointments").send(bookingPayload(slots[0]._id))).status,
+    409
+  );
 });
 
 test("request validation failure leaves the Slot unclaimed", async () => {
@@ -215,6 +643,43 @@ test("direct Slot management rejects impossible or owned state changes", async (
     .set("Authorization", `Bearer ${adminToken}`)
     .send({ isOpen: true, status: "available" });
   assert.equal(ownedChange.status, 409);
+});
+
+test("public booking that wins before direct Slot mutation cannot be overwritten", async () => {
+  const slot = await Slot.create(availableSlot());
+  const originalFindOneAndUpdate = Slot.findOneAndUpdate;
+  let bookingResponse;
+  let injected = false;
+
+  Slot.findOneAndUpdate = async function (filter, ...args) {
+    if (!injected && filter?._id?.toString() === slot._id.toString() && filter.appointmentId === null) {
+      injected = true;
+      Slot.findOneAndUpdate = originalFindOneAndUpdate;
+      bookingResponse = await bookSlot(slot._id);
+    }
+    return originalFindOneAndUpdate.call(this, filter, ...args);
+  };
+
+  try {
+    const adminResponse = await request(app)
+      .patch(`/api/admin/slots/${slot._id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ isOpen: false, status: "closed" });
+
+    assert.equal(bookingResponse.status, 201);
+    assert.equal(adminResponse.status, 409);
+    assert.deepEqual(adminResponse.body, {
+      message: "Slot ownership changed; refresh and try again"
+    });
+
+    const bookedSlot = await Slot.findById(slot._id);
+    assert.equal(bookedSlot.isOpen, false);
+    assert.equal(bookedSlot.status, "booked");
+    assert.equal(bookedSlot.appointmentId.toString(), bookingResponse.body.appointment._id);
+    assert.equal(await Appointment.countDocuments({ slotId: slot._id }), 1);
+  } finally {
+    Slot.findOneAndUpdate = originalFindOneAndUpdate;
+  }
 });
 
 test("startSession failure returns a safe 500 without database mutation", async () => {
@@ -360,6 +825,213 @@ test("day opening does not reopen a Slot with an Appointment owner", async () =>
   assert.equal(unchangedSlot.appointmentId.toString(), owner._id.toString());
 });
 
+test("public booking that wins during day opening remains canonical and owned", async () => {
+  const slot = await Slot.create(availableSlot());
+  const originalUpdateOne = Slot.updateOne;
+  let bookingResponse;
+  let injected = false;
+
+  Slot.updateOne = async function (filter, ...args) {
+    if (
+      !injected &&
+      filter?.date === slot.date &&
+      filter?.startTime === slot.startTime &&
+      filter.appointmentId === null
+    ) {
+      injected = true;
+      Slot.updateOne = originalUpdateOne;
+      bookingResponse = await bookSlot(slot._id);
+    }
+    return originalUpdateOne.call(this, filter, ...args);
+  };
+
+  try {
+    const response = await request(app)
+      .patch(`/api/admin/slots/day/${slot.date}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ action: "open", times: [{ startTime: slot.startTime, endTime: slot.endTime }] });
+
+    assert.equal(bookingResponse.status, 201);
+    assert.equal(response.status, 200);
+
+    const bookedSlot = await Slot.findById(slot._id);
+    assert.equal(bookedSlot.isOpen, false);
+    assert.equal(bookedSlot.status, "booked");
+    assert.equal(bookedSlot.appointmentId.toString(), bookingResponse.body.appointment._id);
+    assert.equal(await Slot.countDocuments({ date: slot.date, startTime: slot.startTime }), 1);
+    assert.equal(await Appointment.countDocuments({ slotId: slot._id }), 1);
+  } finally {
+    Slot.updateOne = originalUpdateOne;
+  }
+});
+
+test("day opening does not swallow an unrelated duplicate-key error", async () => {
+  const slot = await Slot.create(availableSlot());
+  const originalUpdateOne = Slot.updateOne;
+  Slot.updateOne = async () => {
+    const error = new Error("sensitive unrelated unique-index detail");
+    error.code = 11000;
+    error.keyPattern = { unrelatedField: 1 };
+    error.keyValue = { unrelatedField: "collision" };
+    throw error;
+  };
+
+  try {
+    const response = await request(app)
+      .patch(`/api/admin/slots/day/${slot.date}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ action: "open", times: [{ startTime: slot.startTime, endTime: slot.endTime }] });
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, { message: "Failed to update day slots" });
+    assert.doesNotMatch(JSON.stringify(response.body), /sensitive|unique-index|collision/);
+    assert.deepEqual((await Slot.findById(slot._id)).toObject(), slot.toObject());
+  } finally {
+    Slot.updateOne = originalUpdateOne;
+  }
+});
+
+test("day opening fails closed for an ambiguous duplicate-key error", async () => {
+  const slot = await Slot.create(availableSlot());
+  const originalUpdateOne = Slot.updateOne;
+  Slot.updateOne = async () => {
+    const error = new Error("sensitive ambiguous duplicate detail");
+    error.code = 11000;
+    throw error;
+  };
+
+  try {
+    const response = await request(app)
+      .patch(`/api/admin/slots/day/${slot.date}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ action: "open", times: [{ startTime: slot.startTime, endTime: slot.endTime }] });
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, { message: "Failed to update day slots" });
+    assert.doesNotMatch(JSON.stringify(response.body), /sensitive|ambiguous|duplicate/);
+    assert.deepEqual((await Slot.findById(slot._id)).toObject(), slot.toObject());
+  } finally {
+    Slot.updateOne = originalUpdateOne;
+  }
+});
+
+test("day opening fails closed when canonical duplicate keyValue is missing", async () => {
+  const slot = await Slot.create({
+    ...availableSlot(),
+    isOpen: false,
+    status: "closed"
+  });
+  const historicalAppointment = await Appointment.create({
+    ...bookingPayload(slot._id),
+    status: "cancelled"
+  });
+  const originalSlot = slot.toObject();
+  const originalAppointment = historicalAppointment.toObject();
+  const originalUpdateOne = Slot.updateOne;
+  Slot.updateOne = async () => {
+    const error = new Error("sensitive missing keyValue database detail");
+    error.code = 11000;
+    error.keyPattern = { date: 1, startTime: 1 };
+    throw error;
+  };
+
+  try {
+    const response = await request(app)
+      .patch(`/api/admin/slots/day/${slot.date}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ action: "open", times: [{ startTime: slot.startTime, endTime: slot.endTime }] });
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, { message: "Failed to update day slots" });
+    assert.doesNotMatch(JSON.stringify(response.body), /sensitive|keyValue|database|11000/);
+    assert.deepEqual((await Slot.findById(slot._id)).toObject(), originalSlot);
+    assert.deepEqual((await Appointment.findById(historicalAppointment._id)).toObject(), originalAppointment);
+  } finally {
+    Slot.updateOne = originalUpdateOne;
+  }
+});
+
+test("range opening fails closed when canonical duplicate keyValue conflicts", async () => {
+  const slot = await Slot.create({
+    ...availableSlot(),
+    date: "2099-01-05",
+    isOpen: false,
+    status: "closed"
+  });
+  const historicalAppointment = await Appointment.create({
+    ...bookingPayload(slot._id),
+    status: "cancelled"
+  });
+  const originalSlot = slot.toObject();
+  const originalAppointment = historicalAppointment.toObject();
+  const originalUpdateOne = Slot.updateOne;
+  Slot.updateOne = async () => {
+    const error = new Error("sensitive conflicting keyValue database detail");
+    error.code = 11000;
+    error.keyPattern = { date: 1, startTime: 1 };
+    error.keyValue = { date: "2099-01-04", startTime: "15:30" };
+    throw error;
+  };
+
+  try {
+    const response = await request(app)
+      .post("/api/admin/slots/open-range")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        startDate: slot.date,
+        endDate: slot.date,
+        times: [{ startTime: slot.startTime, endTime: slot.endTime }]
+      });
+
+    assert.equal(response.status, 500);
+    assert.deepEqual(response.body, { message: "Failed to open slots" });
+    assert.doesNotMatch(JSON.stringify(response.body), /sensitive|keyValue|database|11000/);
+    assert.deepEqual((await Slot.findById(slot._id)).toObject(), originalSlot);
+    assert.deepEqual((await Appointment.findById(historicalAppointment._id)).toObject(), originalAppointment);
+  } finally {
+    Slot.updateOne = originalUpdateOne;
+  }
+});
+
+test("repeated direct and day Slot mutations are safe, scoped, and preserve history", async () => {
+  const target = await Slot.create(availableSlot());
+  const other = await Slot.create({ ...availableSlot(), date: "2099-01-02" });
+  const historicalAppointment = await Appointment.create({
+    ...bookingPayload(target._id),
+    status: "cancelled"
+  });
+  const authorization = { Authorization: `Bearer ${adminToken}` };
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const direct = await request(app)
+      .patch(`/api/admin/slots/${target._id}`)
+      .set(authorization)
+      .send({ isOpen: false, status: "closed" });
+    assert.equal(direct.status, 200);
+  }
+
+  for (const action of ["close", "close", "open", "open"]) {
+    const day = await request(app)
+      .patch(`/api/admin/slots/day/${target.date}`)
+      .set(authorization)
+      .send({
+        action,
+        times: [{ startTime: target.startTime, endTime: target.endTime }]
+      });
+    assert.equal(day.status, 200);
+  }
+
+  const finalTarget = await Slot.findById(target._id);
+  const unchangedOther = await Slot.findById(other._id);
+  assert.equal(finalTarget.isOpen, true);
+  assert.equal(finalTarget.status, "available");
+  assert.equal(finalTarget.appointmentId, null);
+  assert.equal(unchangedOther.isOpen, true);
+  assert.equal(unchangedOther.status, "available");
+  assert.equal(await Slot.countDocuments({ date: target.date, startTime: target.startTime }), 1);
+  assert.equal(await Appointment.countDocuments({ _id: historicalAppointment._id, status: "cancelled" }), 1);
+});
+
 test("day closing does not close a Slot with an Appointment owner", async () => {
   const slot = await Slot.create(availableSlot());
   const owner = await Appointment.create({
@@ -475,7 +1147,7 @@ test("cancelled Appointment cannot reactivate after its Slot is rebooked", async
   assert.equal((await Appointment.findById(oldAppointmentId)).status, "cancelled");
 });
 
-test("openRangeSlots skips duplicate keys but exposes unrelated failures safely", async () => {
+test("openRangeSlots handles canonical retries but exposes unrelated failures safely", async () => {
   const payload = {
     startDate: "2099-06-01",
     endDate: "2099-06-01",
@@ -494,8 +1166,8 @@ test("openRangeSlots skips duplicate keys but exposes unrelated failures safely"
   assert.equal(duplicate.status, 200);
   assert.equal(duplicate.body.createdCount, 0);
 
-  const originalCreate = Slot.create;
-  Slot.create = async () => {
+  const originalUpdateOne = Slot.updateOne;
+  Slot.updateOne = async () => {
     throw new Error("sensitive simulated database failure");
   };
   try {
@@ -507,8 +1179,56 @@ test("openRangeSlots skips duplicate keys but exposes unrelated failures safely"
     assert.equal(failure.body.message, "Failed to open slots");
     assert.doesNotMatch(JSON.stringify(failure.body), /sensitive simulated database failure/);
   } finally {
-    Slot.create = originalCreate;
+    Slot.updateOne = originalUpdateOne;
   }
+});
+
+test("bulk range close is retry-safe and preserves booked ownership and appointment history", async () => {
+  const available = await Slot.create({ ...availableSlot(), date: "2099-07-01" });
+  const closed = await Slot.create({
+    ...availableSlot(),
+    date: "2099-07-02",
+    isOpen: false,
+    status: "closed"
+  });
+  const booked = await Slot.create({
+    ...availableSlot(),
+    date: "2099-07-03",
+    isOpen: false,
+    status: "booked"
+  });
+  const outside = await Slot.create({ ...availableSlot(), date: "2099-07-04" });
+  const appointment = await Appointment.create({
+    ...bookingPayload(booked._id),
+    status: "confirmed"
+  });
+  await Slot.findByIdAndUpdate(booked._id, { appointmentId: appointment._id });
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await request(app)
+      .patch("/api/admin/slots/close-range")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ startDate: "2099-07-01", endDate: "2099-07-03" });
+    assert.equal(response.status, 200);
+  }
+
+  const [updatedAvailable, updatedClosed, updatedBooked, unchangedOutside] = await Promise.all([
+    Slot.findById(available._id),
+    Slot.findById(closed._id),
+    Slot.findById(booked._id),
+    Slot.findById(outside._id)
+  ]);
+
+  assert.equal(updatedAvailable.isOpen, false);
+  assert.equal(updatedAvailable.status, "closed");
+  assert.equal(updatedClosed.isOpen, false);
+  assert.equal(updatedClosed.status, "closed");
+  assert.equal(updatedBooked.isOpen, false);
+  assert.equal(updatedBooked.status, "booked");
+  assert.equal(updatedBooked.appointmentId.toString(), appointment._id.toString());
+  assert.equal(unchangedOutside.isOpen, true);
+  assert.equal(unchangedOutside.status, "available");
+  assert.equal((await Appointment.findById(appointment._id)).status, "confirmed");
 });
 
 test("public booking rejects missing, whitespace, wrong-type, and unknown input before mutation", async () => {

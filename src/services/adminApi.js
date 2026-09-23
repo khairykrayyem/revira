@@ -61,6 +61,16 @@ export const openRangeSlotsRequest = async (token, payload) => {
   }, "Failed to open slots");
 };
 
+export const closeRangeSlotsRequest = async (token, payload) => {
+  return authenticatedAdminRequest("/admin/slots/close-range", token, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  }, "Failed to close slots");
+};
+
 export const updateDaySlotsRequest = async (token, date, action) => {
   return authenticatedAdminRequest(`/admin/slots/day/${date}`, token, {
     method: "PATCH",

@@ -1,16 +1,19 @@
 import Appointment from "../models/Appointment.js";
 import Slot from "../models/Slot.js";
 import mongoose from "mongoose";
+import { buildFutureSlotFilter } from "../utils/clinicTime.js";
 
 class BookingConflictError extends Error {}
 
-export const getOpenSlots = async (req, res) => {
+export const getOpenSlotsAt = async (req, res, now) => {
   try {
     const { from, to } = req.query;
 
     const filter = {
       isOpen: true,
-      status: "available"
+      status: "available",
+      appointmentId: null,
+      ...buildFutureSlotFilter(now)
     };
 
     if (from && to) {
@@ -24,7 +27,9 @@ export const getOpenSlots = async (req, res) => {
   }
 };
 
-export const createAppointment = async (req, res) => {
+export const getOpenSlots = async (req, res) => getOpenSlotsAt(req, res, new Date());
+
+export const createAppointmentAt = async (req, res, now) => {
   let session;
 
   try {
@@ -46,7 +51,8 @@ export const createAppointment = async (req, res) => {
           _id: slotId,
           isOpen: true,
           status: "available",
-          appointmentId: null
+          appointmentId: null,
+          ...buildFutureSlotFilter(now)
         },
         {
           $set: {
@@ -108,3 +114,5 @@ export const createAppointment = async (req, res) => {
     }
   }
 };
+
+export const createAppointment = async (req, res) => createAppointmentAt(req, res, new Date());

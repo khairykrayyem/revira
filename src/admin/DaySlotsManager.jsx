@@ -4,6 +4,8 @@ function DaySlotsManager({
   onOpenDay,
   onCloseDay,
   onToggleSlot,
+  pendingDayAction,
+  pendingSlotIds,
   language,
 }) {
   const labels =
@@ -50,11 +52,11 @@ function DaySlotsManager({
           </div>
 
           <div className="admin-actions-row" style={{ marginBottom: "16px" }}>
-            <button className="btn btn-primary" onClick={onOpenDay}>
+            <button type="button" className="btn btn-primary" onClick={onOpenDay} disabled={Boolean(pendingDayAction)}>
               {labels.openDay}
             </button>
 
-            <button className="btn btn-secondary" onClick={onCloseDay}>
+            <button type="button" className="btn btn-secondary" onClick={onCloseDay} disabled={Boolean(pendingDayAction)}>
               {labels.closeDay}
             </button>
           </div>
@@ -81,10 +83,12 @@ function DaySlotsManager({
                     <div>
                       {!isBooked && (
                         <button
+                          type="button"
                           className={`mini-btn ${
                             isClosed ? "mini-btn-confirm" : "mini-btn-cancel"
                           }`}
                           onClick={() => onToggleSlot(slot)}
+                          disabled={pendingSlotIds.has(slot._id)}
                         >
                           {isClosed ? labels.openSlot : labels.closeSlot}
                         </button>

@@ -1,4 +1,4 @@
-function AppointmentsTable({ appointments, onUpdateStatus, language }) {
+function AppointmentsTable({ appointments, onUpdateStatus, pendingAppointmentIds, language }) {
   const labels =
     language === "he"
       ? {
@@ -131,19 +131,27 @@ function AppointmentsTable({ appointments, onUpdateStatus, language }) {
                   </td>
                   <td>
                     <div className="appointment-actions">
-                      <button
-                        className="mini-btn mini-btn-confirm"
-                        onClick={() => onUpdateStatus(appointment, "confirmed")}
-                      >
-                        {labels.confirm}
-                      </button>
+                      {appointment.status === "pending" && (
+                        <button
+                          type="button"
+                          className="mini-btn mini-btn-confirm"
+                          onClick={() => onUpdateStatus(appointment, "confirmed")}
+                          disabled={pendingAppointmentIds.has(appointment._id)}
+                        >
+                          {labels.confirm}
+                        </button>
+                      )}
 
-                      <button
-                        className="mini-btn mini-btn-cancel"
-                        onClick={() => onUpdateStatus(appointment, "cancelled")}
-                      >
-                        {labels.cancel}
-                      </button>
+                      {["pending", "confirmed"].includes(appointment.status) && (
+                        <button
+                          type="button"
+                          className="mini-btn mini-btn-cancel"
+                          onClick={() => onUpdateStatus(appointment, "cancelled")}
+                          disabled={pendingAppointmentIds.has(appointment._id)}
+                        >
+                          {labels.cancel}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

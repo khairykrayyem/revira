@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AppointmentsTable from "./AppointmentsTable";
 import MonthCalendar from "./MonthCalendar";
 import DaySlotsManager from "./DaySlotsManager";
 import {
+  closeRangeSlotsRequest,
   getAppointmentsRequest,
   getDaySlotsRequest,
   getMonthOverviewRequest,
@@ -11,11 +12,12 @@ import {
   updateDaySlotsRequest,
   updateSlotRequest,
 } from "../services/adminApi";
+import { getAdminRangeBounds } from "../utils/adminRange";
+import { getClinicDateTime } from "../utils/clinicTime";
 
 function AdminDashboard({ token, language, onLogout }) {
   const [month, setMonth] = useState(() => {
-    const today = new Date();
-    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+    return getClinicDateTime().date.slice(0, 7);
   });
 
   const [selectedDate, setSelectedDate] = useState("");
@@ -25,6 +27,14 @@ function AdminDashboard({ token, language, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [actionMessage, setActionMessage] = useState("");
   const [error, setError] = useState("");
+  const [isRangePending, setIsRangePending] = useState(false);
+  const [pendingDayAction, setPendingDayAction] = useState("");
+  const [pendingSlotIds, setPendingSlotIds] = useState(() => new Set());
+  const [pendingAppointmentIds, setPendingAppointmentIds] = useState(() => new Set());
+  const rangePendingRef = useRef(false);
+  const dayPendingRef = useRef(false);
+  const pendingSlotIdsRef = useRef(new Set());
+  const pendingAppointmentIdsRef = useRef(new Set());
   const [isMonthCalendarOpen, setIsMonthCalendarOpen] = useState(true);
 const [isDayManagerOpen, setIsDayManagerOpen] = useState(true); 
 
@@ -37,6 +47,9 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
           open7: "פתח 7 ימים",
           open14: "פתח 14 ימים",
           open30: "פתח חודש",
+          close7: "סגור 7 ימים",
+          close14: "סגור 14 ימים",
+          close30: "סגור חודש",
           loading: "טוען נתונים...",
         }
       : {
@@ -46,34 +59,36 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
           open7: "افتح 7 أيام",
           open14: "افتح 14 يومًا",
           open30: "افتح شهرًا",
+          close7: "أغلق 7 أيام",
+          close14: "أغلق 14 يومًا",
+          close30: "أغلق شهرًا",
           loading: "جارٍ تحميل البيانات...",
         };
 
-  const formatDate = (dateObj) => {
-    const year = dateObj.getFullYear();
-    const monthValue = String(dateObj.getMonth() + 1).padStart(2, "0");
-    const day = String(dateObj.getDate()).padStart(2, "0");
-    return `${year}-${monthValue}-${day}`;
-  };
+  const loadMonthData = useCallback(async () => {
+    const result = await getMonthOverviewRequest(token, month);
+    setMonthData(result);
+  }, [month, token]);
 
-  const loadData = useCallback(async () => {
+  const loadAppointments = useCallback(async () => {
+    const result = await getAppointmentsRequest(token);
+    setAppointments(result);
+  }, [token]);
+
+  const loadData = useCallback(async (showLoading = false) => {
     try {
-      setLoading(true);
-      setError("");
+      if (showLoading) {
+        setLoading(true);
+        setError("");
+      }
 
-      const [monthRes, appointmentsRes] = await Promise.all([
-        getMonthOverviewRequest(token, month),
-        getAppointmentsRequest(token),
-      ]);
-
-      setMonthData(monthRes);
-      setAppointments(appointmentsRes);
+      await Promise.all([loadMonthData(), loadAppointments()]);
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
-  }, [month, token]);
+  }, [loadAppointments, loadMonthData]);
 
   const loadSelectedDaySlots = useCallback(async (date) => {
     if (!date) {
@@ -90,7 +105,7 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
   }, [token]);
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, [loadData]);
 
   useEffect(() => {
@@ -99,6 +114,7 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
 
   useEffect(() => {
   const interval = setInterval(() => {
+    if (document.visibilityState !== "visible") return;
     loadData();
     if (selectedDate) {
       loadSelectedDaySlots(selectedDate);
@@ -108,32 +124,57 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
   return () => clearInterval(interval);
 }, [loadData, loadSelectedDaySlots, selectedDate]);
 
-  const handleOpenRange = async (daysToAdd) => {
+  const handleRangeAction = async (mode, action) => {
+    if (rangePendingRef.current) return;
+
+    let bounds;
     try {
+      bounds = getAdminRangeBounds({ month, selectedDate, mode });
+    } catch {
+      setError(
+        language === "he"
+          ? "לא ניתן לעדכן טווח בחודש שעבר"
+          : "لا يمكن تحديث نطاق في شهر سابق"
+      );
+      return;
+    }
+
+    if (action === "close") {
+      const confirmed = window.confirm(
+        language === "he"
+          ? `לסגור את כל השעות הפנויות בין ${bounds.startDate} ל-${bounds.endDate}?`
+          : `هل تريد إغلاق جميع الساعات المتاحة من ${bounds.startDate} حتى ${bounds.endDate}؟`
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      rangePendingRef.current = true;
+      setIsRangePending(true);
       setError("");
       setActionMessage("");
 
-      const today = new Date();
-      const future = new Date();
-      future.setDate(today.getDate() + daysToAdd);
-
-      await openRangeSlotsRequest(token, {
-        startDate: formatDate(today),
-        endDate: formatDate(future),
-      });
+      if (action === "open") {
+        await openRangeSlotsRequest(token, bounds);
+      } else {
+        await closeRangeSlotsRequest(token, bounds);
+      }
 
       setActionMessage(
         language === "he"
-          ? "התורים נפתחו בהצלחה"
-          : "تم فتح المواعيد بنجاح"
+          ? action === "open" ? "התורים נפתחו בהצלחה" : "התורים הפנויים נסגרו בהצלחה"
+          : action === "open" ? "تم فتح المواعيد بنجاح" : "تم إغلاق المواعيد المتاحة بنجاح"
       );
 
-      await loadData();
-      if (selectedDate) {
-        await loadSelectedDaySlots(selectedDate);
-      }
+      await Promise.all([
+        loadMonthData(),
+        selectedDate ? loadSelectedDaySlots(selectedDate) : Promise.resolve(),
+      ]);
     } catch (err) {
       setError(err.message);
+    } finally {
+      rangePendingRef.current = false;
+      setIsRangePending(false);
     }
   };
 
@@ -144,9 +185,11 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
   };
 
   const handleOpenDay = async () => {
-    if (!selectedDate) return;
+    if (!selectedDate || dayPendingRef.current) return;
 
     try {
+      dayPendingRef.current = true;
+      setPendingDayAction("open");
       setError("");
       setActionMessage("");
 
@@ -158,17 +201,28 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
           : "تم فتح اليوم بنجاح"
       );
 
-      await loadData();
-      await loadSelectedDaySlots(selectedDate);
+      await Promise.all([loadMonthData(), loadSelectedDaySlots(selectedDate)]);
     } catch (err) {
       setError(err.message);
+    } finally {
+      dayPendingRef.current = false;
+      setPendingDayAction("");
     }
   };
 
   const handleCloseDay = async () => {
-    if (!selectedDate) return;
+    if (!selectedDate || dayPendingRef.current) return;
+
+    const confirmed = window.confirm(
+      language === "he"
+        ? "לסגור את כל השעות הפנויות ביום שנבחר?"
+        : "هل تريد إغلاق جميع الساعات المتاحة في اليوم المحدد؟"
+    );
+    if (!confirmed) return;
 
     try {
+      dayPendingRef.current = true;
+      setPendingDayAction("close");
       setError("");
       setActionMessage("");
 
@@ -180,15 +234,21 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
           : "تم إغلاق اليوم بنجاح"
       );
 
-      await loadData();
-      await loadSelectedDaySlots(selectedDate);
+      await Promise.all([loadMonthData(), loadSelectedDaySlots(selectedDate)]);
     } catch (err) {
       setError(err.message);
+    } finally {
+      dayPendingRef.current = false;
+      setPendingDayAction("");
     }
   };
 
   const handleToggleSlot = async (slot) => {
+    if (pendingSlotIdsRef.current.has(slot._id)) return;
+
     try {
+      pendingSlotIdsRef.current.add(slot._id);
+      setPendingSlotIds((current) => new Set(current).add(slot._id));
       setError("");
       setActionMessage("");
 
@@ -205,10 +265,16 @@ const [isDayManagerOpen, setIsDayManagerOpen] = useState(true);
           : "تم تحديث الساعة بنجاح"
       );
 
-      await loadData();
-      await loadSelectedDaySlots(selectedDate);
+      await Promise.all([loadMonthData(), loadSelectedDaySlots(selectedDate)]);
     } catch (err) {
       setError(err.message);
+    } finally {
+      pendingSlotIdsRef.current.delete(slot._id);
+      setPendingSlotIds((current) => {
+        const next = new Set(current);
+        next.delete(slot._id);
+        return next;
+      });
     }
   };
 
@@ -260,7 +326,20 @@ const openAppointmentWhatsApp = (appointment, status) => {
 };
 
 const handleUpdateAppointment = async (appointment, status) => {
+  if (pendingAppointmentIdsRef.current.has(appointment._id)) return;
+
+  if (status === "cancelled") {
+    const confirmed = window.confirm(
+      language === "he"
+        ? "לבטל את התור שנבחר?"
+        : "هل تريد إلغاء الموعد المحدد؟"
+    );
+    if (!confirmed) return;
+  }
+
   try {
+    pendingAppointmentIdsRef.current.add(appointment._id);
+    setPendingAppointmentIds((current) => new Set(current).add(appointment._id));
     setError("");
     setActionMessage("");
 
@@ -272,14 +351,22 @@ const handleUpdateAppointment = async (appointment, status) => {
         : "تم تحديث الموعد بنجاح"
     );
 
-    await loadData();
-    if (selectedDate) {
-      await loadSelectedDaySlots(selectedDate);
-    }
+    await Promise.all([
+      loadMonthData(),
+      loadAppointments(),
+      selectedDate ? loadSelectedDaySlots(selectedDate) : Promise.resolve(),
+    ]);
 
     openAppointmentWhatsApp(appointment, status);
   } catch (err) {
     setError(err.message);
+  } finally {
+    pendingAppointmentIdsRef.current.delete(appointment._id);
+    setPendingAppointmentIds((current) => {
+      const next = new Set(current);
+      next.delete(appointment._id);
+      return next;
+    });
   }
 };
   return (
@@ -291,30 +378,45 @@ const handleUpdateAppointment = async (appointment, status) => {
             <p className="section-subtitle admin-main-subtitle">{labels.subtitle}</p>
           </div>
 
-          <button className="btn btn-secondary" onClick={onLogout}>
+          <button type="button" className="btn btn-secondary" onClick={onLogout}>
             {labels.logout}
           </button>
         </div>
 
         <div className="card admin-actions-card">
           <div className="admin-actions-row">
-            <button className="btn btn-primary" onClick={() => handleOpenRange(7)}>
+            <button type="button" className="btn btn-primary" onClick={() => handleRangeAction("7", "open")} disabled={isRangePending}>
               {labels.open7}
             </button>
 
-            <button className="btn btn-secondary" onClick={() => handleOpenRange(14)}>
+            <button type="button" className="btn btn-secondary" onClick={() => handleRangeAction("14", "open")} disabled={isRangePending}>
               {labels.open14}
             </button>
 
-            <button className="btn btn-secondary" onClick={() => handleOpenRange(30)}>
+            <button type="button" className="btn btn-secondary" onClick={() => handleRangeAction("month", "open")} disabled={isRangePending}>
               {labels.open30}
+            </button>
+
+            <button type="button" className="btn btn-secondary" onClick={() => handleRangeAction("7", "close")} disabled={isRangePending}>
+              {labels.close7}
+            </button>
+
+            <button type="button" className="btn btn-secondary" onClick={() => handleRangeAction("14", "close")} disabled={isRangePending}>
+              {labels.close14}
+            </button>
+
+            <button type="button" className="btn btn-secondary" onClick={() => handleRangeAction("month", "close")} disabled={isRangePending}>
+              {labels.close30}
             </button>
 
             <input
               type="month"
               className="admin-month-input"
               value={month}
-              onChange={(e) => setMonth(e.target.value)}
+              onChange={(e) => {
+                setMonth(e.target.value);
+                setSelectedDate("");
+              }}
             />
           </div>
 
@@ -366,6 +468,8 @@ const handleUpdateAppointment = async (appointment, status) => {
       onOpenDay={handleOpenDay}
       onCloseDay={handleCloseDay}
       onToggleSlot={handleToggleSlot}
+      pendingDayAction={pendingDayAction}
+      pendingSlotIds={pendingSlotIds}
       language={language}
     />
   )}
@@ -373,6 +477,7 @@ const handleUpdateAppointment = async (appointment, status) => {
             <AppointmentsTable
               appointments={appointments}
               onUpdateStatus={handleUpdateAppointment}
+              pendingAppointmentIds={pendingAppointmentIds}
               language={language}
             />
           </>

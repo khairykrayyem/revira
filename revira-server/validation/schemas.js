@@ -114,6 +114,20 @@ export const openRangeBodySchema = z
     }
   });
 
+export const closeRangeBodySchema = z
+  .strictObject({
+    startDate: isoDateSchema,
+    endDate: isoDateSchema
+  })
+  .superRefine(({ startDate, endDate }, context) => {
+    const rangeLength = dateToDayNumber(endDate) - dateToDayNumber(startDate) + 1;
+    if (rangeLength < 1) {
+      context.addIssue({ code: "custom", path: ["endDate"], message: "Date range is inverted" });
+    } else if (rangeLength > MAX_RANGE_DAYS) {
+      context.addIssue({ code: "custom", path: ["endDate"], message: "Date range is too large" });
+    }
+  });
+
 export const dayParamsSchema = z.strictObject({ date: isoDateSchema });
 export const idParamsSchema = z.strictObject({ id: objectIdSchema });
 

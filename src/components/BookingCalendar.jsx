@@ -2,13 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { createAppointment, getOpenSlots } from "../services/api";
+import { getClinicDateTime, isSlotStartInFuture } from "../utils/clinicTime";
+
+const clinicDateToLocalDate = (dateString) => {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
 
 function BookingCalendar({ data, language }) {
-  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(() =>
+    clinicDateToLocalDate(getClinicDateTime().date)
+  );
   const [slots, setSlots] = useState([]);
   const [selectedSlotId, setSelectedSlotId] = useState("");
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [clinicClock, setClinicClock] = useState(() => new Date());
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 const [whatsappUrl, setWhatsappUrl] = useState("");
@@ -20,6 +29,10 @@ const [whatsappUrl, setWhatsappUrl] = useState("");
   });
 
   const treatments = useMemo(() => data.treatmentsList || [], [data]);
+  const visibleSlots = useMemo(
+    () => slots.filter((slot) => isSlotStartInFuture(slot, clinicClock)),
+    [clinicClock, slots]
+  );
 
   const formatDate = (date) => {
     const year = date.getFullYear();
@@ -50,6 +63,27 @@ const [whatsappUrl, setWhatsappUrl] = useState("");
   useEffect(() => {
     fetchDaySlots(selectedDate);
   }, [selectedDate, language]);
+
+  useEffect(() => {
+    let timeoutId;
+
+    const scheduleClinicClockUpdate = () => {
+      const delayUntilNextMinute = 60000 - (Date.now() % 60000) + 50;
+      timeoutId = window.setTimeout(() => {
+        setClinicClock(new Date());
+        scheduleClinicClockUpdate();
+      }, delayUntilNextMinute);
+    };
+
+    scheduleClinicClockUpdate();
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  useEffect(() => {
+    if (selectedSlotId && !visibleSlots.some((slot) => slot._id === selectedSlotId)) {
+      setSelectedSlotId("");
+    }
+  }, [selectedSlotId, visibleSlots]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -134,6 +168,9 @@ if (result.whatsappUrl) {
               value={selectedDate}
               locale={language === "he" ? "he-IL" : "ar"}
               className="revira-calendar"
+              tileDisabled={({ date, view }) =>
+                view === "month" && formatDate(date) < getClinicDateTime().date
+              }
             />
 
             <div className="selected-date-label">
@@ -150,7 +187,7 @@ if (result.whatsappUrl) {
                 <p className="booking-empty-state">
                   {language === "he" ? "טוען שעות..." : "جارٍ تحميل الساعات..."}
                 </p>
-              ) : slots.length === 0 ? (
+              ) : visibleSlots.length === 0 ? (
                 <p className="booking-empty-state">
                   {language === "he"
                     ? "אין שעות זמינות ביום זה"
@@ -158,7 +195,7 @@ if (result.whatsappUrl) {
                 </p>
               ) : (
                 <div className="calendar-slots-grid">
-                  {slots.map((slot) => (
+                  {visibleSlots.map((slot) => (
                     <button
                       type="button"
                       key={slot._id}
@@ -204,6 +241,7 @@ if (result.whatsappUrl) {
               <div className="form-group">
                 <label>{language === "he" ? "בחר טיפול" : "اختر العلاج"}</label>
                 <select
+                  className="booking-treatment-select"
                   name="treatment"
                   value={formData.treatment}
                   onChange={handleChange}
